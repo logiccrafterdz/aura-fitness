@@ -14,7 +14,7 @@ import {
 } from "@workspace/db";
 import { eq, ilike, or, and, desc, count, sql } from "drizzle-orm";
 import { z } from "zod";
-import { requireAuth } from "../lib/auth";
+import { requireAuth, requirePermission } from "../lib/auth";
 import { logAudit } from "../lib/audit";
 import { AppError } from "../lib/errors";
 import { getPagination, paginated } from "../lib/paginate";
@@ -27,7 +27,7 @@ function generateMemberNumber(): string {
   return `AUR${year}${rand}`;
 }
 
-router.get("/members", requireAuth, async (req, res, next) => {
+router.get("/members", requireAuth, requirePermission("members", "read"), async (req, res, next) => {
   try {
     const { page, limit, offset } = getPagination(req);
     const search = req.query.search as string | undefined;
@@ -68,7 +68,7 @@ router.get("/members", requireAuth, async (req, res, next) => {
   }
 });
 
-router.post("/members", requireAuth, async (req, res, next) => {
+router.post("/members", requireAuth, requirePermission("members", "write"), async (req, res, next) => {
   try {
     const createSchema = z.object({
       firstName: z.string().min(1),
@@ -131,7 +131,7 @@ router.post("/members", requireAuth, async (req, res, next) => {
   }
 });
 
-router.get("/members/:id", requireAuth, async (req, res, next) => {
+router.get("/members/:id", requireAuth, requirePermission("members", "read"), async (req, res, next) => {
   try {
     const [member] = await db
       .select()
@@ -153,7 +153,7 @@ router.get("/members/:id", requireAuth, async (req, res, next) => {
   }
 });
 
-router.patch("/members/:id", requireAuth, async (req, res, next) => {
+router.patch("/members/:id", requireAuth, requirePermission("members", "write"), async (req, res, next) => {
   try {
     const [existing] = await db
       .select()
@@ -214,7 +214,7 @@ router.patch("/members/:id", requireAuth, async (req, res, next) => {
   }
 });
 
-router.get("/members/:id/timeline", requireAuth, async (req, res, next) => {
+router.get("/members/:id/timeline", requireAuth, requirePermission("members", "read"), async (req, res, next) => {
   try {
     const events = await db
       .select()
@@ -228,7 +228,7 @@ router.get("/members/:id/timeline", requireAuth, async (req, res, next) => {
   }
 });
 
-router.get("/members/:id/memberships", requireAuth, async (req, res, next) => {
+router.get("/members/:id/memberships", requireAuth, requirePermission("members", "read"), async (req, res, next) => {
   try {
     const rows = await db
       .select({
@@ -250,7 +250,7 @@ router.get("/members/:id/memberships", requireAuth, async (req, res, next) => {
   }
 });
 
-router.get("/members/:id/invoices", requireAuth, async (req, res, next) => {
+router.get("/members/:id/invoices", requireAuth, requirePermission("members", "read"), async (req, res, next) => {
   try {
     const rows = await db
       .select()
@@ -263,7 +263,7 @@ router.get("/members/:id/invoices", requireAuth, async (req, res, next) => {
   }
 });
 
-router.get("/members/:id/bookings", requireAuth, async (req, res, next) => {
+router.get("/members/:id/bookings", requireAuth, requirePermission("members", "read"), async (req, res, next) => {
   try {
     const rows = await db
       .select({
@@ -286,7 +286,7 @@ router.get("/members/:id/bookings", requireAuth, async (req, res, next) => {
   }
 });
 
-router.get("/members/:id/access-logs", requireAuth, async (req, res, next) => {
+router.get("/members/:id/access-logs", requireAuth, requirePermission("members", "read"), async (req, res, next) => {
   try {
     const rows = await db
       .select()
@@ -300,7 +300,7 @@ router.get("/members/:id/access-logs", requireAuth, async (req, res, next) => {
   }
 });
 
-router.post("/members/:id/status", requireAuth, async (req, res, next) => {
+router.post("/members/:id/status", requireAuth, requirePermission("members", "write"), async (req, res, next) => {
   try {
     const schema = z.object({
       status: z.enum(["active", "inactive", "suspended", "pending"]),
