@@ -13,7 +13,7 @@ import { eq, and, desc, count, lt, gte, lte } from "drizzle-orm";
 import { z } from "zod";
 import jwt from "jsonwebtoken";
 import { createHash } from "crypto";
-import { requireAuth } from "../lib/auth";
+import { requireAuth, requirePermission } from "../lib/auth";
 import { logAudit } from "../lib/audit";
 import { AppError } from "../lib/errors";
 import { getPagination, paginated } from "../lib/paginate";
@@ -64,6 +64,7 @@ function getClientIp(req: any): string {
 router.get(
   "/members/:memberId/access-token",
   requireAuth,
+  requirePermission("access", "read"),
   async (req, res, next) => {
     try {
       const memberId = req.params.memberId as string;
@@ -344,7 +345,7 @@ router.post("/access/heartbeat", async (req, res, next) => {
   }
 });
 
-router.get("/access/logs", requireAuth, async (req, res, next) => {
+router.get("/access/logs", requireAuth, requirePermission("access", "read"), async (req, res, next) => {
   try {
     const { page, limit, offset } = getPagination(req);
     const memberId = req.query.memberId as string | undefined;
@@ -394,7 +395,7 @@ router.get("/access/logs", requireAuth, async (req, res, next) => {
   }
 });
 
-router.get("/access/points", requireAuth, async (req, res, next) => {
+router.get("/access/points", requireAuth, requirePermission("access", "read"), async (req, res, next) => {
   try {
     const rows = await db
       .select()
@@ -406,7 +407,7 @@ router.get("/access/points", requireAuth, async (req, res, next) => {
   }
 });
 
-router.post("/access/points", requireAuth, async (req, res, next) => {
+router.post("/access/points", requireAuth, requirePermission("access", "write"), async (req, res, next) => {
   try {
     const schema = z.object({
       name: z.string().min(1),
@@ -434,7 +435,7 @@ router.post("/access/points", requireAuth, async (req, res, next) => {
   }
 });
 
-router.patch("/access/points/:id", requireAuth, async (req, res, next) => {
+router.patch("/access/points/:id", requireAuth, requirePermission("access", "write"), async (req, res, next) => {
   try {
     const [existing] = await db
       .select()
@@ -462,7 +463,7 @@ router.patch("/access/points/:id", requireAuth, async (req, res, next) => {
   }
 });
 
-router.delete("/access/points/:id", requireAuth, async (req, res, next) => {
+router.delete("/access/points/:id", requireAuth, requirePermission("access", "write"), async (req, res, next) => {
   try {
     await db
       .update(accessPointsTable)
@@ -474,7 +475,7 @@ router.delete("/access/points/:id", requireAuth, async (req, res, next) => {
   }
 });
 
-router.get("/access/time-rules", requireAuth, async (req, res, next) => {
+router.get("/access/time-rules", requireAuth, requirePermission("access", "read"), async (req, res, next) => {
   try {
     const rows = await db
       .select()
@@ -486,7 +487,7 @@ router.get("/access/time-rules", requireAuth, async (req, res, next) => {
   }
 });
 
-router.post("/access/time-rules", requireAuth, async (req, res, next) => {
+router.post("/access/time-rules", requireAuth, requirePermission("access", "write"), async (req, res, next) => {
   try {
     const schema = z.object({
       name: z.string().min(1),
@@ -508,6 +509,7 @@ router.post("/access/time-rules", requireAuth, async (req, res, next) => {
 router.patch(
   "/access/time-rules/:id",
   requireAuth,
+  requirePermission("access", "write"),
   async (req, res, next) => {
     try {
       const schema = z.object({
