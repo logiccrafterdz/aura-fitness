@@ -11,7 +11,7 @@ import {
 } from "@workspace/db";
 import { eq, and, desc, count, gte, lte } from "drizzle-orm";
 import { z } from "zod";
-import { requireAuth } from "../lib/auth";
+import { requireAuth, requirePermission } from "../lib/auth";
 import { hashPassword } from "../lib/auth";
 import { logAudit } from "../lib/audit";
 import { AppError } from "../lib/errors";
@@ -19,7 +19,7 @@ import { getPagination, paginated } from "../lib/paginate";
 
 const router = Router();
 
-router.get("/staff", requireAuth, async (req, res, next) => {
+router.get("/staff", requireAuth, requirePermission("staff", "read"), async (req, res, next) => {
   try {
     const { page, limit, offset } = getPagination(req);
     const [rows, [{ total }]] = await Promise.all([
@@ -48,7 +48,7 @@ router.get("/staff", requireAuth, async (req, res, next) => {
   }
 });
 
-router.post("/staff", requireAuth, async (req, res, next) => {
+router.post("/staff", requireAuth, requirePermission("staff", "write"), async (req, res, next) => {
   try {
     const schema = z.object({
       email: z.string().email(),
@@ -76,7 +76,7 @@ router.post("/staff", requireAuth, async (req, res, next) => {
   }
 });
 
-router.get("/staff/:id", requireAuth, async (req, res, next) => {
+router.get("/staff/:id", requireAuth, requirePermission("staff", "read"), async (req, res, next) => {
   try {
     const [user] = await db
       .select({
@@ -100,7 +100,7 @@ router.get("/staff/:id", requireAuth, async (req, res, next) => {
   }
 });
 
-router.patch("/staff/:id", requireAuth, async (req, res, next) => {
+router.patch("/staff/:id", requireAuth, requirePermission("staff", "write"), async (req, res, next) => {
   try {
     const schema = z.object({
       firstName: z.string().optional(),
@@ -128,7 +128,7 @@ router.patch("/staff/:id", requireAuth, async (req, res, next) => {
   }
 });
 
-router.get("/roles", requireAuth, async (req, res, next) => {
+router.get("/roles", requireAuth, requirePermission("staff", "read"), async (req, res, next) => {
   try {
     const roles = await db.select().from(rolesTable).orderBy(rolesTable.name);
     const permsMap: Record<string, typeof permissionsTable.$inferSelect[]> = {};
@@ -149,7 +149,7 @@ router.get("/roles", requireAuth, async (req, res, next) => {
   }
 });
 
-router.post("/roles", requireAuth, async (req, res, next) => {
+router.post("/roles", requireAuth, requirePermission("staff", "write"), async (req, res, next) => {
   try {
     const schema = z.object({ name: z.string().min(1), description: z.string().optional() });
     const data = schema.parse(req.body);
@@ -161,7 +161,7 @@ router.post("/roles", requireAuth, async (req, res, next) => {
   }
 });
 
-router.get("/shifts", requireAuth, async (req, res, next) => {
+router.get("/shifts", requireAuth, requirePermission("staff", "read"), async (req, res, next) => {
   try {
     const { page, limit, offset } = getPagination(req);
     const staffId = req.query.staffId as string | undefined;
@@ -196,7 +196,7 @@ router.get("/shifts", requireAuth, async (req, res, next) => {
   }
 });
 
-router.post("/shifts", requireAuth, async (req, res, next) => {
+router.post("/shifts", requireAuth, requirePermission("staff", "write"), async (req, res, next) => {
   try {
     const schema = z.object({
       staffId: z.string().uuid(),
@@ -216,7 +216,7 @@ router.post("/shifts", requireAuth, async (req, res, next) => {
   }
 });
 
-router.get("/trainer-notes", requireAuth, async (req, res, next) => {
+router.get("/trainer-notes", requireAuth, requirePermission("staff", "read"), async (req, res, next) => {
   try {
     const memberId = req.query.memberId as string | undefined;
     const where = memberId ? eq(trainerNotesTable.memberId, memberId) : undefined;
@@ -241,7 +241,7 @@ router.get("/trainer-notes", requireAuth, async (req, res, next) => {
   }
 });
 
-router.post("/trainer-notes", requireAuth, async (req, res, next) => {
+router.post("/trainer-notes", requireAuth, requirePermission("staff", "write"), async (req, res, next) => {
   try {
     const schema = z.object({
       memberId: z.string().uuid(),
