@@ -7,7 +7,7 @@ import {
   memberTimelineEventsTable,
   membershipFreezeRequestsTable,
 } from "@workspace/db";
-import { eq, and, desc, count } from "drizzle-orm";
+import { eq, and, desc, count, lt } from "drizzle-orm";
 import { z } from "zod";
 import { requireAuth } from "../lib/auth";
 import { logAudit } from "../lib/audit";
@@ -518,6 +518,48 @@ router.post("/membership-freeze-requests/:id/reject", requireAuth, async (req, r
     });
 
     res.json(updated);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/memberships/auto-expire", requireAuth, async (req, res, next) => {
+  try {
+    const now = new Date();
+
+    const [expiredResult, resumedResult] = await Promise.all([
+      db
+        .update(membershipsTable)
+        .set({ status: "expired", updatedAt: now })
+        .where(
+          and(
+            eq(membershipsTable.status, "active"),
+            lt(membershipsTable.endDate, now),
+          ),
+        )
+        .returning({ id: membershipsTable.id }),
+      db
+        .update(membershipsTable)
+        .set({ status: "active", freezeStart: null, freezeEnd: null, updatedAt: now })
+        .where(
+          and(
+            eq(membershipsTable.status, "frozen"),
+            lt(membershipsTable.freezeEnd!, now),
+          ),
+        )
+        .returning({ id: membershipsTable.id }),
+    ]);
+
+    req.log.info(
+      { expired: expiredResult.length, resumed: resumedResult.length },
+      "auto-expire run",
+    );
+
+    res.json({
+      expired: expiredResult.length,
+      resumed: resumedResult.length,
+      processedAt: now,
+    });
   } catch (err) {
     next(err);
   }

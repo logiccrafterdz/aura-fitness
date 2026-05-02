@@ -104,6 +104,27 @@ Key hooks added in Phase 2:
 - `useMemberStatusChange` — POST /members/:id/status with reason
 - `useSendNotification` — POST /notifications/send
 - `useNotificationRecords` — paginated sent notification log
+- `useAutoExpire` — POST /memberships/auto-expire (expire stale + resume unfrozen)
+- `usePortalQrToken` — GET /portal/access-token/:memberNumber (public, no auth, 55s auto-refetch)
+
+## Final Phase Additions
+
+### API
+- `GET /api/portal/access-token/:memberNumber` — **public** endpoint, generates 60s JWT QR token for member self-service portal
+- `POST /api/memberships/auto-expire` — admin endpoint; sets `expired` on active memberships past endDate, sets `active` on frozen memberships past freezeEnd
+- Rate limiting on `POST /api/access/verify` — in-memory, 10 attempts/IP/minute, returns 429
+
+### DB Indexes (12 new)
+- `members`: status, created_at
+- `memberships`: member_id, status, end_date, (status, end_date) composite
+- `access_logs`: created_at, member_id, result
+- `invoices`: member_id, status, created_at
+- `payments`: member_id, status, method, confirmed_at
+
+### Frontend
+- **Portal** — reads `:memberNumber` from URL param via `useParams()`, auto-loads member; active members see "Generate QR Code" button; QR renders via `qrcode` lib with 60s countdown + auto-refresh
+- **Mobile sidebar** — `AppLayout` now wraps `<Sidebar open onClose>` with an overlay; hamburger bar appears on screens < lg; nav links close sidebar on click
+- **README.md** + **DEMO.md** — project documentation and 5-minute demo walkthrough
 
 ## Auth Flow
 

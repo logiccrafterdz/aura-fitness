@@ -5,6 +5,7 @@ import {
   uuid,
   pgEnum,
   integer,
+  index,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { membersTable } from "./members";
@@ -42,7 +43,12 @@ export const membershipsTable = pgTable("memberships", {
   createdBy: uuid("created_by").references(() => usersTable.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+}, (t) => ({
+  memberIdIdx: index("memberships_member_id_idx").on(t.memberId),
+  statusIdx: index("memberships_status_idx").on(t.status),
+  endDateIdx: index("memberships_end_date_idx").on(t.endDate),
+  statusEndDateIdx: index("memberships_status_end_date_idx").on(t.status, t.endDate),
+}));
 
 export const membershipFreezeRequestsTable = pgTable(
   "membership_freeze_requests",

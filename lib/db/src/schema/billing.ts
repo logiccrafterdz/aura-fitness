@@ -7,6 +7,7 @@ import {
   numeric,
   integer,
   boolean,
+  index,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { membersTable } from "./members";
@@ -55,7 +56,11 @@ export const invoicesTable = pgTable("invoices", {
   createdBy: uuid("created_by").references(() => usersTable.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+}, (t) => ({
+  memberIdIdx: index("invoices_member_id_idx").on(t.memberId),
+  statusIdx: index("invoices_status_idx").on(t.status),
+  createdAtIdx: index("invoices_created_at_idx").on(t.createdAt),
+}));
 
 export const invoiceItemsTable = pgTable("invoice_items", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -88,7 +93,12 @@ export const paymentsTable = pgTable("payments", {
   recordedBy: uuid("recorded_by").references(() => usersTable.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+}, (t) => ({
+  memberIdIdx: index("payments_member_id_idx").on(t.memberId),
+  statusIdx: index("payments_status_idx").on(t.status),
+  methodIdx: index("payments_method_idx").on(t.method),
+  confirmedAtIdx: index("payments_confirmed_at_idx").on(t.confirmedAt),
+}));
 
 export const discountsTable = pgTable("discounts", {
   id: uuid("id").primaryKey().defaultRandom(),

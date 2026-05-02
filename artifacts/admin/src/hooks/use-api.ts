@@ -651,3 +651,28 @@ export function useVerifyAccess() {
       api.post("/access/verify", body),
   });
 }
+
+export function useAutoExpire() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post<{ expired: number; resumed: number; processedAt: string }>("/memberships/auto-expire", {}),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["memberships"] });
+      qc.invalidateQueries({ queryKey: ["dashboard"] });
+    },
+  });
+}
+
+export function usePortalQrToken(memberNumber: string, enabled: boolean = false) {
+  return useQuery({
+    queryKey: ["portal-qr-token", memberNumber],
+    queryFn: () =>
+      api.get<{ token: string; expiresAt: string; memberId: string; expiresInSeconds: number }>(
+        `/portal/access-token/${memberNumber}`,
+      ),
+    enabled: !!memberNumber && enabled,
+    refetchInterval: enabled ? 55_000 : false,
+    staleTime: 0,
+    gcTime: 0,
+  });
+}

@@ -22,6 +22,27 @@ const router = Router();
 const QR_SECRET = process.env.QR_SECRET || "aura-qr-secret";
 const QR_EXPIRY_SECONDS = 60;
 
+// Simple in-memory rate limiter for verify endpoint
+const _verifyRateMap = new Map<string, { count: number; resetAt: number }>();
+function verifyRateLimit(req: any, res: any, next: any) {
+  const ip =
+    (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ??
+    req.ip ??
+    "unknown";
+  const now = Date.now();
+  const entry = _verifyRateMap.get(ip);
+  if (!entry || entry.resetAt < now) {
+    _verifyRateMap.set(ip, { count: 1, resetAt: now + 60_000 });
+    return next();
+  }
+  if (entry.count >= 10) {
+    res.status(429).json({ error: "Too many verification attempts. Try again in 1 minute." });
+    return;
+  }
+  entry.count++;
+  next();
+}
+
 function generateQrPayload(memberId: string): string {
   const payload = {
     sub: memberId,
@@ -75,7 +96,34 @@ router.get(
   },
 );
 
-router.post("/access/verify", async (req, res, next) => {
+router.get("/portal/access-token/:memberNumber", async (req, res, next) => {
+  try {
+    const memberNumber = req.params.memberNumber as string;
+    const [member] = await db
+      .select({ id: membersTable.id, firstName: membersTable.firstName, status: membersTable.status })
+      .from(membersTable)
+      .where(eq(membersTable.memberNumber, memberNumber));
+    if (!member) throw new AppError(404, "Member not found");
+    if (member.status !== "active") throw new AppError(403, "Member account is not active");
+
+    const token = generateQrPayload(member.id);
+    const tokenHash = createHash("sha256").update(token).digest("hex");
+    const expiresAt = new Date(Date.now() + QR_EXPIRY_SECONDS * 1000);
+
+    await db.insert(accessTokensTable).values({
+      memberId: member.id,
+      tokenHash,
+      tokenType: "qr",
+      expiresAt,
+    });
+
+    res.json({ token, expiresAt, memberId: member.id, expiresInSeconds: QR_EXPIRY_SECONDS });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/access/verify", verifyRateLimit, async (req, res, next) => {
   try {
     const schema = z.object({
       token: z.string(),

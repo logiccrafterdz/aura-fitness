@@ -7,6 +7,7 @@ import {
   boolean,
   integer,
   jsonb,
+  index,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { membersTable } from "./members";
@@ -63,7 +64,11 @@ export const accessLogsTable = pgTable("access_logs", {
   ),
   ipAddress: text("ip_address"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (t) => ({
+  createdAtIdx: index("access_logs_created_at_idx").on(t.createdAt),
+  memberIdIdx: index("access_logs_member_id_idx").on(t.memberId),
+  resultIdx: index("access_logs_result_idx").on(t.result),
+}));
 
 export const timeRulesTable = pgTable("time_rules", {
   id: uuid("id").primaryKey().defaultRandom(),

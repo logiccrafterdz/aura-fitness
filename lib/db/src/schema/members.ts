@@ -5,6 +5,7 @@ import {
   boolean,
   uuid,
   pgEnum,
+  index,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { usersTable } from "./users";
@@ -42,7 +43,10 @@ export const membersTable = pgTable("members", {
   createdBy: uuid("created_by").references(() => usersTable.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+}, (t) => ({
+  statusIdx: index("members_status_idx").on(t.status),
+  createdAtIdx: index("members_created_at_idx").on(t.createdAt),
+}));
 
 export const memberTimelineEventsTable = pgTable("member_timeline_events", {
   id: uuid("id").primaryKey().defaultRandom(),

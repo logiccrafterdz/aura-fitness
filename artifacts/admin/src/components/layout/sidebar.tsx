@@ -34,12 +34,25 @@ const navItems = [
   { name: "Settings", href: "/settings", icon: Settings },
 ];
 
-export function Sidebar() {
+export function Sidebar({
+  open,
+  onClose,
+}: {
+  open?: boolean;
+  onClose?: () => void;
+}) {
   const [location] = useLocation();
   const { user, logout } = useAuth();
 
   return (
-    <aside className="w-64 bg-sidebar border-r border-sidebar-border h-screen flex flex-col sticky top-0">
+    <aside
+      className={cn(
+        "w-64 bg-sidebar border-r border-sidebar-border h-screen flex flex-col",
+        "fixed inset-y-0 left-0 z-30 transition-transform duration-200 ease-in-out",
+        "lg:static lg:translate-x-0 lg:z-auto lg:transition-none",
+        open ? "translate-x-0" : "-translate-x-full",
+      )}
+    >
       <div className="p-6 flex items-center gap-3 border-b border-sidebar-border">
         <div className="w-8 h-8 rounded bg-primary flex items-center justify-center text-primary-foreground font-serif font-bold text-xl">
           A
@@ -51,14 +64,15 @@ export function Sidebar() {
         {navItems.map((item) => {
           const isActive = location === item.href || (item.href !== "/" && location.startsWith(item.href));
           return (
-            <Link 
-              key={item.name} 
+            <Link
+              key={item.name}
               href={item.href}
+              onClick={onClose}
               className={cn(
                 "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-colors",
-                isActive 
-                  ? "bg-sidebar-accent text-sidebar-accent-foreground" 
-                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                isActive
+                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground",
               )}
             >
               <item.icon className="w-4 h-4" />

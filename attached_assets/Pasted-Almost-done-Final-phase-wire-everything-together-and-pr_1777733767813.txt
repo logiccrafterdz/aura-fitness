@@ -1,0 +1,71 @@
+Almost done. Final phase — wire everything together and prepare for handoff.
+
+FINAL PHASE — Completion & Handoff:
+
+1. CRITICAL END-TO-END FLOWS (test and fix each one):
+
+Flow A — New Member Onboarding:
+Create member → assign plan → membership created → invoice auto-generated → 
+record cash payment → invoice marked paid → welcome notification triggered → 
+timeline shows all events
+
+Flow B — QR Access:
+Open /portal/:memberNumber → QR code displayed (rotating 60s) → 
+paste token in /kiosk → verify endpoint runs all checks → 
+green AUTORISÉ or red REFUSÉ shown → access log created
+
+Flow C — Baridimob Payment:
+Create invoice → record baridimob payment with proof → 
+pending state → admin goes to billing → confirms payment → 
+invoice marked paid → notification sent → audit log entry
+
+Flow D — Membership Freeze:
+Member requests freeze → appears in /freeze-requests → 
+admin approves with date range → membership status = frozen → 
+timeline event → auto-resume on end date via background check
+
+Flow E — Class Booking:
+Create class session → book member → capacity decreases → 
+second booking on full session → goes to waitlist → 
+cancel first booking → waitlist auto-promotes → notification sent
+
+2. MISSING PIECES — implement now:
+- /portal/:memberNumber page: member-facing, no sidebar, shows QR + membership info
+- /kiosk page: full-screen access terminal
+- QR code rendered as actual image (use qrcode library or canvas)
+- Auto-expiry: on dashboard load, check memberships past end_date → mark expired
+- Freeze auto-resume: on dashboard load, check freeze_end past → resume membership
+
+3. PERFORMANCE & SECURITY:
+- Rate limit on POST /access/verify (max 10/min per IP)
+- All sensitive fields (emergency_contact, medical_notes) excluded from list endpoints
+- Pagination working on: members, invoices, access logs, audit logs
+- Add indexes: members(status), memberships(status, end_date), access_logs(created_at), invoices(status, due_date)
+
+4. UI POLISH:
+- Empty states on all tables (no members yet, no invoices, etc.)
+- Loading skeletons on dashboard KPI cards
+- Toast notifications on all create/update/delete actions
+- Confirm dialog before any delete action
+- Mobile-responsive sidebar (hamburger menu)
+- Arabic RTL support: flip layout direction for Arabic text fields
+
+5. DOCUMENTATION:
+Generate these files:
+- README.md: project overview, tech stack, setup instructions, env vars, seed command
+- API.md: all endpoints with method, path, auth required, request body, response shape
+- DEMO.md: step-by-step demo script for showing the system to a client
+
+6. FINAL BUILD CHECK:
+□ npm run build passes with zero errors on both packages
+□ All 13 admin pages load without console errors  
+□ Login → Dashboard → Create Member → QR → Kiosk flow works
+□ /portal and /kiosk accessible without login
+□ Seed data loads cleanly on fresh DB (npm run seed)
+□ All API routes return proper error messages (not stack traces) in production
+
+After completing everything, provide:
+- Final live URL
+- Complete feature list with ✅ / ⚠️ / ❌ status
+- Demo walkthrough script (5 minutes)
+- Next development priorities for Phase 2
