@@ -62,6 +62,7 @@ export const accessLogsTable = pgTable("access_logs", {
   manualOverrideBy: uuid("manual_override_by").references(
     () => usersTable.id,
   ),
+  ipAddress: text("ip_address"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

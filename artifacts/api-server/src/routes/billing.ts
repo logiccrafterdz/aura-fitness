@@ -4,11 +4,12 @@ import {
   invoicesTable,
   invoiceItemsTable,
   paymentsTable,
+  discountsTable,
   membersTable,
   membershipsTable,
   memberTimelineEventsTable,
 } from "@workspace/db";
-import { eq, and, desc, count, sql } from "drizzle-orm";
+import { eq, and, desc, count, sql, gte, lt, lte } from "drizzle-orm";
 import { z } from "zod";
 import { requireAuth } from "../lib/auth";
 import { logAudit } from "../lib/audit";
@@ -77,6 +78,7 @@ router.post("/invoices", requireAuth, async (req, res, next) => {
           unitPrice: z.string(),
         }),
       ),
+      discountCode: z.string().optional(),
       discountAmount: z.string().optional(),
       dueDate: z.string().optional(),
       notes: z.string().optional(),
@@ -87,14 +89,50 @@ router.post("/invoices", requireAuth, async (req, res, next) => {
       (sum, i) => sum + parseFloat(i.unitPrice) * i.quantity,
       0,
     );
-    const discount = parseFloat(data.discountAmount ?? "0");
-    const total = subtotal - discount;
+
+    let discountApplied = parseFloat(data.discountAmount ?? "0");
+
+    if (data.discountCode) {
+      const now = new Date();
+      const [disc] = await db
+        .select()
+        .from(discountsTable)
+        .where(
+          and(
+            eq(discountsTable.code, data.discountCode.toUpperCase()),
+            eq(discountsTable.isActive, true),
+          ),
+        );
+      if (disc) {
+        const validFrom = disc.validFrom ? disc.validFrom <= now : true;
+        const validTo = disc.validUntil ? disc.validUntil >= now : true;
+        const hasUses = disc.maxUses
+          ? (disc.usesCount ?? 0) < disc.maxUses
+          : true;
+        if (validFrom && validTo && hasUses) {
+          if (disc.type === "percent") {
+            discountApplied = subtotal * (parseFloat(disc.value) / 100);
+          } else {
+            discountApplied = Math.min(parseFloat(disc.value), subtotal);
+          }
+          await db
+            .update(discountsTable)
+            .set({ usesCount: (disc.usesCount ?? 0) + 1 })
+            .where(eq(discountsTable.id, disc.id));
+        }
+      }
+    }
+
+    const total = Math.max(0, subtotal - discountApplied);
 
     let invoiceNumber: string;
     let exists = true;
     do {
       invoiceNumber = generateInvoiceNumber();
-      const [ex] = await db.select({ id: invoicesTable.id }).from(invoicesTable).where(eq(invoicesTable.invoiceNumber, invoiceNumber));
+      const [ex] = await db
+        .select({ id: invoicesTable.id })
+        .from(invoicesTable)
+        .where(eq(invoicesTable.invoiceNumber, invoiceNumber));
       exists = !!ex;
     } while (exists);
 
@@ -105,7 +143,7 @@ router.post("/invoices", requireAuth, async (req, res, next) => {
         memberId: data.memberId,
         membershipId: data.membershipId,
         subtotal: subtotal.toFixed(2),
-        discountAmount: discount.toFixed(2),
+        discountAmount: discountApplied.toFixed(2),
         total: total.toFixed(2),
         dueDate: data.dueDate ? new Date(data.dueDate) : null,
         notes: data.notes,
@@ -130,7 +168,13 @@ router.post("/invoices", requireAuth, async (req, res, next) => {
       actorId: req.user!.sub,
     });
 
-    await logAudit({ req, action: "create", resource: "invoices", resourceId: invoice.id, newValue: invoice });
+    await logAudit({
+      req,
+      action: "create",
+      resource: "invoices",
+      resourceId: invoice.id,
+      newValue: invoice,
+    });
     res.status(201).json(invoice);
   } catch (err) {
     next(err);
@@ -161,8 +205,14 @@ router.get("/invoices/:id", requireAuth, async (req, res, next) => {
       .where(eq(invoicesTable.id, req.params.id));
     if (!invoice) throw new AppError(404, "Invoice not found");
 
-    const items = await db.select().from(invoiceItemsTable).where(eq(invoiceItemsTable.invoiceId, req.params.id));
-    const payments = await db.select().from(paymentsTable).where(eq(paymentsTable.invoiceId, req.params.id));
+    const items = await db
+      .select()
+      .from(invoiceItemsTable)
+      .where(eq(invoiceItemsTable.invoiceId, req.params.id));
+    const payments = await db
+      .select()
+      .from(paymentsTable)
+      .where(eq(paymentsTable.invoiceId, req.params.id));
 
     res.json({ ...invoice, items, payments });
   } catch (err) {
@@ -172,11 +222,16 @@ router.get("/invoices/:id", requireAuth, async (req, res, next) => {
 
 router.patch("/invoices/:id", requireAuth, async (req, res, next) => {
   try {
-    const [existing] = await db.select().from(invoicesTable).where(eq(invoicesTable.id, req.params.id));
+    const [existing] = await db
+      .select()
+      .from(invoicesTable)
+      .where(eq(invoicesTable.id, req.params.id));
     if (!existing) throw new AppError(404, "Invoice not found");
 
     const schema = z.object({
-      status: z.enum(["draft", "pending", "paid", "overdue", "cancelled"]).optional(),
+      status: z
+        .enum(["draft", "pending", "paid", "overdue", "cancelled"])
+        .optional(),
       notes: z.string().optional(),
       dueDate: z.string().optional(),
     });
@@ -184,10 +239,22 @@ router.patch("/invoices/:id", requireAuth, async (req, res, next) => {
 
     const updateData: any = { ...data, updatedAt: new Date() };
     if (data.dueDate) updateData.dueDate = new Date(data.dueDate);
-    if (data.status === "paid" && existing.status !== "paid") updateData.paidAt = new Date();
+    if (data.status === "paid" && existing.status !== "paid")
+      updateData.paidAt = new Date();
 
-    const [updated] = await db.update(invoicesTable).set(updateData).where(eq(invoicesTable.id, req.params.id)).returning();
-    await logAudit({ req, action: "update", resource: "invoices", resourceId: req.params.id, oldValue: existing, newValue: updated });
+    const [updated] = await db
+      .update(invoicesTable)
+      .set(updateData)
+      .where(eq(invoicesTable.id, req.params.id))
+      .returning();
+    await logAudit({
+      req,
+      action: "update",
+      resource: "invoices",
+      resourceId: req.params.id,
+      oldValue: existing,
+      newValue: updated,
+    });
     res.json(updated);
   } catch (err) {
     next(err);
@@ -196,7 +263,10 @@ router.patch("/invoices/:id", requireAuth, async (req, res, next) => {
 
 router.post("/invoices/:id/payments", requireAuth, async (req, res, next) => {
   try {
-    const [invoice] = await db.select().from(invoicesTable).where(eq(invoicesTable.id, req.params.id));
+    const [invoice] = await db
+      .select()
+      .from(invoicesTable)
+      .where(eq(invoicesTable.id, req.params.id));
     if (!invoice) throw new AppError(404, "Invoice not found");
 
     const schema = z.object({
@@ -226,11 +296,21 @@ router.post("/invoices/:id/payments", requireAuth, async (req, res, next) => {
 
     if (isCash) {
       const totalPaid = await db
-        .select({ sum: sql<string>`coalesce(sum(amount::numeric), 0)` })
+        .select({
+          sum: sql<string>`coalesce(sum(amount::numeric), 0)`,
+        })
         .from(paymentsTable)
-        .where(and(eq(paymentsTable.invoiceId, invoice.id), eq(paymentsTable.status, "confirmed")));
+        .where(
+          and(
+            eq(paymentsTable.invoiceId, invoice.id),
+            eq(paymentsTable.status, "confirmed"),
+          ),
+        );
       if (parseFloat(totalPaid[0].sum) >= parseFloat(invoice.total)) {
-        await db.update(invoicesTable).set({ status: "paid", paidAt: new Date(), updatedAt: new Date() }).where(eq(invoicesTable.id, invoice.id));
+        await db
+          .update(invoicesTable)
+          .set({ status: "paid", paidAt: new Date(), updatedAt: new Date() })
+          .where(eq(invoicesTable.id, invoice.id));
       }
 
       await db.insert(memberTimelineEventsTable).values({
@@ -241,7 +321,13 @@ router.post("/invoices/:id/payments", requireAuth, async (req, res, next) => {
       });
     }
 
-    await logAudit({ req, action: "create", resource: "payments", resourceId: payment.id, newValue: payment });
+    await logAudit({
+      req,
+      action: "create",
+      resource: "payments",
+      resourceId: payment.id,
+      newValue: payment,
+    });
     res.status(201).json(payment);
   } catch (err) {
     next(err);
@@ -274,6 +360,7 @@ router.get("/payments", requireAuth, async (req, res, next) => {
           method: paymentsTable.method,
           status: paymentsTable.status,
           proofUrl: paymentsTable.proofUrl,
+          referenceNumber: paymentsTable.referenceNumber,
           confirmedAt: paymentsTable.confirmedAt,
           createdAt: paymentsTable.createdAt,
         })
@@ -295,24 +382,46 @@ router.get("/payments", requireAuth, async (req, res, next) => {
 
 router.patch("/payments/:id/confirm", requireAuth, async (req, res, next) => {
   try {
-    const [payment] = await db.select().from(paymentsTable).where(eq(paymentsTable.id, req.params.id));
+    const [payment] = await db
+      .select()
+      .from(paymentsTable)
+      .where(eq(paymentsTable.id, req.params.id));
     if (!payment) throw new AppError(404, "Payment not found");
-    if (payment.status !== "pending") throw new AppError(400, "Payment is not pending");
+    if (payment.status !== "pending")
+      throw new AppError(400, "Payment is not pending");
 
     const [updated] = await db
       .update(paymentsTable)
-      .set({ status: "confirmed", confirmedBy: req.user!.sub, confirmedAt: new Date(), updatedAt: new Date() })
+      .set({
+        status: "confirmed",
+        confirmedBy: req.user!.sub,
+        confirmedAt: new Date(),
+        updatedAt: new Date(),
+      })
       .where(eq(paymentsTable.id, req.params.id))
       .returning();
 
-    const [invoice] = await db.select().from(invoicesTable).where(eq(invoicesTable.id, payment.invoiceId));
+    const [invoice] = await db
+      .select()
+      .from(invoicesTable)
+      .where(eq(invoicesTable.id, payment.invoiceId));
     if (invoice) {
       const totalPaid = await db
-        .select({ sum: sql<string>`coalesce(sum(amount::numeric), 0)` })
+        .select({
+          sum: sql<string>`coalesce(sum(amount::numeric), 0)`,
+        })
         .from(paymentsTable)
-        .where(and(eq(paymentsTable.invoiceId, invoice.id), eq(paymentsTable.status, "confirmed")));
+        .where(
+          and(
+            eq(paymentsTable.invoiceId, invoice.id),
+            eq(paymentsTable.status, "confirmed"),
+          ),
+        );
       if (parseFloat(totalPaid[0].sum) >= parseFloat(invoice.total)) {
-        await db.update(invoicesTable).set({ status: "paid", paidAt: new Date(), updatedAt: new Date() }).where(eq(invoicesTable.id, invoice.id));
+        await db
+          .update(invoicesTable)
+          .set({ status: "paid", paidAt: new Date(), updatedAt: new Date() })
+          .where(eq(invoicesTable.id, invoice.id));
       }
     }
 
@@ -323,7 +432,12 @@ router.patch("/payments/:id/confirm", requireAuth, async (req, res, next) => {
       actorId: req.user!.sub,
     });
 
-    await logAudit({ req, action: "confirm", resource: "payments", resourceId: req.params.id });
+    await logAudit({
+      req,
+      action: "confirm",
+      resource: "payments",
+      resourceId: req.params.id,
+    });
     res.json(updated);
   } catch (err) {
     next(err);
@@ -332,20 +446,209 @@ router.patch("/payments/:id/confirm", requireAuth, async (req, res, next) => {
 
 router.patch("/payments/:id/reject", requireAuth, async (req, res, next) => {
   try {
-    const [payment] = await db.select().from(paymentsTable).where(eq(paymentsTable.id, req.params.id));
+    const [payment] = await db
+      .select()
+      .from(paymentsTable)
+      .where(eq(paymentsTable.id, req.params.id));
     if (!payment) throw new AppError(404, "Payment not found");
-    if (payment.status !== "pending") throw new AppError(400, "Payment is not pending");
+    if (payment.status !== "pending")
+      throw new AppError(400, "Payment is not pending");
 
-    const { reason } = z.object({ reason: z.string().optional() }).parse(req.body);
+    const { reason } = z
+      .object({ reason: z.string().optional() })
+      .parse(req.body);
 
     const [updated] = await db
       .update(paymentsTable)
-      .set({ status: "rejected", rejectionReason: reason, updatedAt: new Date() })
+      .set({
+        status: "rejected",
+        rejectionReason: reason,
+        updatedAt: new Date(),
+      })
       .where(eq(paymentsTable.id, req.params.id))
       .returning();
 
-    await logAudit({ req, action: "reject", resource: "payments", resourceId: req.params.id });
+    await logAudit({
+      req,
+      action: "reject",
+      resource: "payments",
+      resourceId: req.params.id,
+    });
     res.json(updated);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/discounts", requireAuth, async (req, res, next) => {
+  try {
+    const { page, limit, offset } = getPagination(req);
+    const [rows, [{ total }]] = await Promise.all([
+      db
+        .select()
+        .from(discountsTable)
+        .orderBy(desc(discountsTable.createdAt))
+        .limit(limit)
+        .offset(offset),
+      db.select({ total: count() }).from(discountsTable),
+    ]);
+    res.json(paginated(rows, Number(total), page, limit));
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/discounts", requireAuth, async (req, res, next) => {
+  try {
+    const schema = z.object({
+      code: z.string().min(2).max(30).toUpperCase(),
+      type: z.enum(["fixed", "percent"]),
+      value: z.string(),
+      maxUses: z.number().int().positive().optional(),
+      validFrom: z.string().optional(),
+      validUntil: z.string().optional(),
+      description: z.string().optional(),
+    });
+    const data = schema.parse(req.body);
+
+    const [existing] = await db
+      .select({ id: discountsTable.id })
+      .from(discountsTable)
+      .where(eq(discountsTable.code, data.code));
+    if (existing) throw new AppError(400, "Discount code already exists");
+
+    const [discount] = await db
+      .insert(discountsTable)
+      .values({
+        code: data.code,
+        type: data.type,
+        value: data.value,
+        maxUses: data.maxUses,
+        description: data.description,
+        validFrom: data.validFrom ? new Date(data.validFrom) : null,
+        validUntil: data.validUntil ? new Date(data.validUntil) : null,
+        createdBy: req.user!.sub,
+      })
+      .returning();
+
+    await logAudit({
+      req,
+      action: "create",
+      resource: "discounts",
+      resourceId: discount.id,
+      newValue: discount,
+    });
+    res.status(201).json(discount);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.patch("/discounts/:id", requireAuth, async (req, res, next) => {
+  try {
+    const schema = z.object({
+      description: z.string().optional(),
+      maxUses: z.number().int().optional(),
+      validUntil: z.string().optional(),
+      isActive: z.boolean().optional(),
+    });
+    const data = schema.parse(req.body);
+    const updateData: any = { description: data.description, maxUses: data.maxUses, isActive: data.isActive };
+    if (data.validUntil) updateData.validUntil = new Date(data.validUntil);
+
+    const [updated] = await db
+      .update(discountsTable)
+      .set(updateData)
+      .where(eq(discountsTable.id, req.params.id))
+      .returning();
+    if (!updated) throw new AppError(404, "Discount not found");
+
+    await logAudit({
+      req,
+      action: "update",
+      resource: "discounts",
+      resourceId: req.params.id,
+      newValue: updated,
+    });
+    res.json(updated);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete("/discounts/:id", requireAuth, async (req, res, next) => {
+  try {
+    const [updated] = await db
+      .update(discountsTable)
+      .set({ isActive: false })
+      .where(eq(discountsTable.id, req.params.id))
+      .returning();
+    if (!updated) throw new AppError(404, "Discount not found");
+    await logAudit({
+      req,
+      action: "deactivate",
+      resource: "discounts",
+      resourceId: req.params.id,
+    });
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/discounts/validate", requireAuth, async (req, res, next) => {
+  try {
+    const schema = z.object({
+      code: z.string(),
+      amount: z.string().optional(),
+    });
+    const { code, amount } = schema.parse(req.body);
+    const now = new Date();
+
+    const [disc] = await db
+      .select()
+      .from(discountsTable)
+      .where(
+        and(
+          eq(discountsTable.code, code.toUpperCase()),
+          eq(discountsTable.isActive, true),
+        ),
+      );
+
+    if (!disc) {
+      res.json({ valid: false, reason: "Code not found or inactive" });
+      return;
+    }
+
+    if (disc.validFrom && disc.validFrom > now) {
+      res.json({ valid: false, reason: "Code not yet active" });
+      return;
+    }
+    if (disc.validUntil && disc.validUntil < now) {
+      res.json({ valid: false, reason: "Code has expired" });
+      return;
+    }
+    if (disc.maxUses && (disc.usesCount ?? 0) >= disc.maxUses) {
+      res.json({ valid: false, reason: "Code usage limit reached" });
+      return;
+    }
+
+    const subtotal = amount ? parseFloat(amount) : 0;
+    let discountAmount = 0;
+    if (disc.type === "percent") {
+      discountAmount = subtotal * (parseFloat(disc.value) / 100);
+    } else {
+      discountAmount = Math.min(parseFloat(disc.value), subtotal || parseFloat(disc.value));
+    }
+
+    res.json({
+      valid: true,
+      code: disc.code,
+      type: disc.type,
+      value: disc.value,
+      discountAmount: discountAmount.toFixed(2),
+      description: disc.description,
+    });
   } catch (err) {
     next(err);
   }

@@ -1,0 +1,93 @@
+ممتاز! النتائج قوية جداً. الآن أرسل له هذا البرومبت لمرحلة التعمق والتحسين:
+
+```text
+Great work. Now go deeper on every module — no surface-level stubs.
+
+Phase 2 — Harden & Complete:
+
+MEMBERS:
+- Member number auto-generation (AURA-YYYY-XXXX format)
+- Photo upload support
+- Emergency contact + medical notes (encrypted at rest)
+- Arabic name fields fully supported
+- Member status transitions with reason logging (active/frozen/suspended/cancelled)
+- Full timeline events auto-generated on every state change
+
+PLANS & MEMBERSHIPS:
+- Zone-based access restrictions per plan (men-only / women-only / mixed / all zones)
+- Time-based restrictions (e.g. plan only valid 6am–10pm)
+- Freeze workflow: request → approve → auto-resume on freeze end date
+- Auto-expiry job: memberships past end_date → mark expired
+- Renewal flow: renew from expired state → new membership linked to old
+
+BILLING:
+- Invoice auto-numbering (INV-YYYY-XXXX)
+- Discount codes: percent and fixed, with usage limits and validity dates
+- Baridimob proof upload: member/reception uploads image → admin confirms or rejects with note
+- Daily cash reconciliation report: expected vs actual cash per shift
+- Overdue invoice detection + alert on dashboard
+
+ACCESS CONTROL:
+- QR token: JWT-signed, rotates every 60 seconds, single-use verification
+- Verify endpoint enforces: active membership → correct zone → time rule → not frozen/expired → rate limit (max 3 attempts/min)
+- Denial reasons logged precisely: expired, wrong_zone, time_restricted, frozen, not_found
+- Access point last heartbeat tracking
+- Time rules: day-of-week + time range + gender + zone combinations
+
+CLASSES:
+- Waitlist: auto-promote when booking cancels, notify next in line
+- Attendance marking: present / absent / late
+- No-show tracking per member (affects loyalty points)
+- Session status transitions: scheduled → ongoing → completed / cancelled
+- Recurring session generation (weekly schedule → bulk create)
+
+STORE / POS:
+- Barcode field on products
+- Low stock alerts (threshold-based)
+- POS session: open with opening cash → sales → close with closing cash + variance report
+- Inventory transaction log for every stock change (purchase / sale / damage / adjustment)
+- Product expiry date tracking with alerts
+
+NOTIFICATIONS:
+- Arabic + French templates for these triggers:
+  membership_expiry_3days, membership_expiry_1day, membership_expired,
+  payment_confirmed, payment_rejected, booking_confirmed, booking_cancelled,
+  waitlist_promoted, freeze_approved, freeze_resumed
+- Notification record created automatically on each trigger
+- Notification log in member profile tab
+
+REPORTS:
+- Revenue report: by plan / by payment method / by period (daily, weekly, monthly)
+- Member report: new vs cancelled per month, retention rate, gender breakdown, age groups
+- Access report: daily check-ins, peak hours heatmap, denied access breakdown
+- Class report: attendance rate per class type, no-show rate, trainer performance
+- Store report: top products by revenue, low margin alerts, inventory valuation
+
+DASHBOARD:
+- Pending Baridimob confirmations counter with quick-action button
+- Members expiring in next 7 days list (clickable)
+- Today's class sessions with booking fill rate
+- Low stock products alert
+- Real-time access feed (last 10 events, auto-refresh every 30s)
+
+SECURITY & AUDIT:
+- All writes go through audit log emitter (who, what, when, old value, new value)
+- IP address captured on login + access verify
+- Failed login attempts counter, lock after 5 failures for 15 minutes
+- Session management: list active sessions, revoke specific session
+
+SEED DATA — upgrade to realistic demo:
+- 3 staff accounts: admin, receptionist, trainer
+- 50 members with Arabic + French names, Algerian phone numbers (+213)
+- 5 plans with DZD pricing (1500 / 2500 / 3500 / 5000 / 8000 DZD)
+- Memberships in all states: active, frozen, expired, cancelled
+- 30 invoices with various payment statuses
+- 20 Baridimob payments (mix of pending/confirmed/rejected)
+- 100 access logs with realistic timestamps and denial examples
+- 10 class types, 50 sessions, 150 bookings
+- 20 store products, 5 POS sessions, 40 orders
+- Loyalty points earned by active members
+
+Do not ask — implement everything above now, continuously, module by module.
+After all done, give a full completion report listing what was built, what works end-to-end, and any known limitations.
+```

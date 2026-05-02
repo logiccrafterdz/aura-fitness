@@ -67,6 +67,7 @@ export async function getUserWithRole(userId: string) {
       roleId: usersTable.roleId,
       roleName: rolesTable.name,
       isActive: usersTable.isActive,
+      lockedUntil: usersTable.lockedUntil,
     })
     .from(usersTable)
     .leftJoin(rolesTable, eq(usersTable.roleId, rolesTable.id))

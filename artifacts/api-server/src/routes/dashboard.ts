@@ -21,10 +21,13 @@ const router = Router();
 router.get("/reports/dashboard", requireAuth, async (req, res, next) => {
   try {
     const now = new Date();
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const todayStart = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+    );
     const todayEnd = new Date(todayStart.getTime() + 86400000);
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const thirtyDaysFromNow = new Date(now.getTime() + 30 * 86400000);
     const sevenDaysFromNow = new Date(now.getTime() + 7 * 86400000);
 
     const [
@@ -36,33 +39,77 @@ router.get("/reports/dashboard", requireAuth, async (req, res, next) => {
       [{ monthRevenue }],
       [{ todayAccess }],
       [{ pendingPayments }],
+      [{ pendingBaridimob }],
       [{ todayBookings }],
       recentActivity,
       membersByStatus,
+      lowStockProducts,
     ] = await Promise.all([
       db.select({ totalMembers: count() }).from(membersTable),
-      db.select({ activeMembers: count() }).from(membersTable).where(eq(membersTable.status, "active")),
-      db.select({ activeMemberships: count() }).from(membershipsTable).where(eq(membershipsTable.status, "active")),
+      db
+        .select({ activeMembers: count() })
+        .from(membersTable)
+        .where(eq(membersTable.status, "active")),
+      db
+        .select({ activeMemberships: count() })
+        .from(membershipsTable)
+        .where(eq(membershipsTable.status, "active")),
       db
         .select({ expiringSoon: count() })
         .from(membershipsTable)
-        .where(and(eq(membershipsTable.status, "active"), lte(membershipsTable.endDate, sevenDaysFromNow), gte(membershipsTable.endDate, now))),
+        .where(
+          and(
+            eq(membershipsTable.status, "active"),
+            lte(membershipsTable.endDate, sevenDaysFromNow),
+            gte(membershipsTable.endDate, now),
+          ),
+        ),
       db
-        .select({ todayRevenue: sql<string>`coalesce(sum(amount::numeric), 0)` })
+        .select({
+          todayRevenue: sql<string>`coalesce(sum(amount::numeric), 0)`,
+        })
         .from(paymentsTable)
-        .where(and(eq(paymentsTable.status, "confirmed"), gte(paymentsTable.confirmedAt!, todayStart), lt(paymentsTable.confirmedAt!, todayEnd))),
+        .where(
+          and(
+            eq(paymentsTable.status, "confirmed"),
+            gte(paymentsTable.confirmedAt!, todayStart),
+            lt(paymentsTable.confirmedAt!, todayEnd),
+          ),
+        ),
       db
-        .select({ monthRevenue: sql<string>`coalesce(sum(amount::numeric), 0)` })
+        .select({
+          monthRevenue: sql<string>`coalesce(sum(amount::numeric), 0)`,
+        })
         .from(paymentsTable)
-        .where(and(eq(paymentsTable.status, "confirmed"), gte(paymentsTable.confirmedAt!, monthStart))),
+        .where(
+          and(
+            eq(paymentsTable.status, "confirmed"),
+            gte(paymentsTable.confirmedAt!, monthStart),
+          ),
+        ),
       db
         .select({ todayAccess: count() })
         .from(accessLogsTable)
-        .where(and(eq(accessLogsTable.result, "allowed"), gte(accessLogsTable.createdAt, todayStart), lt(accessLogsTable.createdAt, todayEnd))),
+        .where(
+          and(
+            eq(accessLogsTable.result, "allowed"),
+            gte(accessLogsTable.createdAt, todayStart),
+            lt(accessLogsTable.createdAt, todayEnd),
+          ),
+        ),
       db
         .select({ pendingPayments: count() })
         .from(paymentsTable)
         .where(eq(paymentsTable.status, "pending")),
+      db
+        .select({ pendingBaridimob: count() })
+        .from(paymentsTable)
+        .where(
+          and(
+            eq(paymentsTable.status, "pending"),
+            eq(paymentsTable.method, "baridimob"),
+          ),
+        ),
       db
         .select({ todayBookings: count() })
         .from(bookingsTable)
@@ -78,29 +125,89 @@ router.get("/reports/dashboard", requireAuth, async (req, res, next) => {
         .from(accessLogsTable)
         .leftJoin(membersTable, eq(accessLogsTable.memberId, membersTable.id))
         .orderBy(desc(accessLogsTable.createdAt))
-        .limit(10),
+        .limit(15),
       db
         .select({ status: membersTable.status, count: count() })
         .from(membersTable)
         .groupBy(membersTable.status),
+      db
+        .select({
+          id: productsTable.id,
+          name: productsTable.name,
+          category: productsTable.category,
+          stockQuantity: productsTable.stockQuantity,
+          lowStockThreshold: productsTable.lowStockThreshold,
+        })
+        .from(productsTable)
+        .where(
+          and(
+            eq(productsTable.isActive, true),
+            sql`${productsTable.stockQuantity} <= ${productsTable.lowStockThreshold}`,
+          ),
+        )
+        .orderBy(productsTable.stockQuantity)
+        .limit(10),
     ]);
 
-    const expiringSoonMembers = await db
-      .select({
-        id: membershipsTable.id,
-        memberId: membershipsTable.memberId,
-        firstName: membersTable.firstName,
-        lastName: membersTable.lastName,
-        memberNumber: membersTable.memberNumber,
-        endDate: membershipsTable.endDate,
-        planName: plansTable.name,
-      })
-      .from(membershipsTable)
-      .leftJoin(membersTable, eq(membershipsTable.memberId, membersTable.id))
-      .leftJoin(plansTable, eq(membershipsTable.planId, plansTable.id))
-      .where(and(eq(membershipsTable.status, "active"), lte(membershipsTable.endDate, sevenDaysFromNow), gte(membershipsTable.endDate, now)))
-      .orderBy(membershipsTable.endDate)
-      .limit(10);
+    const [expiringSoonMembers, todaysClasses, revenueByMethod] =
+      await Promise.all([
+        db
+          .select({
+            id: membershipsTable.id,
+            memberId: membershipsTable.memberId,
+            firstName: membersTable.firstName,
+            lastName: membersTable.lastName,
+            memberNumber: membersTable.memberNumber,
+            endDate: membershipsTable.endDate,
+            planName: plansTable.name,
+          })
+          .from(membershipsTable)
+          .leftJoin(
+            membersTable,
+            eq(membershipsTable.memberId, membersTable.id),
+          )
+          .leftJoin(plansTable, eq(membershipsTable.planId, plansTable.id))
+          .where(
+            and(
+              eq(membershipsTable.status, "active"),
+              lte(membershipsTable.endDate, sevenDaysFromNow),
+              gte(membershipsTable.endDate, now),
+            ),
+          )
+          .orderBy(membershipsTable.endDate)
+          .limit(10),
+        db
+          .select({
+            id: classSessionsTable.id,
+            className: classTypesTable.name,
+            classColor: classTypesTable.color,
+            startsAt: classSessionsTable.startsAt,
+            endsAt: classSessionsTable.endsAt,
+            maxCapacity: classSessionsTable.maxCapacity,
+            currentBookings: classSessionsTable.currentBookings,
+            room: classSessionsTable.room,
+            status: classSessionsTable.status,
+          })
+          .from(classSessionsTable)
+          .leftJoin(
+            classTypesTable,
+            eq(classSessionsTable.classTypeId, classTypesTable.id),
+          )
+          .where(
+            and(
+              gte(classSessionsTable.startsAt, todayStart),
+              lt(classSessionsTable.startsAt, todayEnd),
+            ),
+          )
+          .orderBy(classSessionsTable.startsAt),
+        db.execute(sql`
+          SELECT method, count(*) as count, coalesce(sum(amount::numeric), 0) as total
+          FROM payments
+          WHERE status = 'confirmed' AND confirmed_at >= ${monthStart}
+          GROUP BY method
+          ORDER BY total DESC
+        `),
+      ]);
 
     res.json({
       members: {
@@ -116,6 +223,7 @@ router.get("/reports/dashboard", requireAuth, async (req, res, next) => {
       revenue: {
         today: parseFloat(todayRevenue),
         thisMonth: parseFloat(monthRevenue),
+        byMethod: revenueByMethod.rows,
       },
       access: {
         today: Number(todayAccess),
@@ -123,7 +231,20 @@ router.get("/reports/dashboard", requireAuth, async (req, res, next) => {
       },
       operations: {
         pendingPayments: Number(pendingPayments),
+        pendingBaridimob: Number(pendingBaridimob),
         todayBookings: Number(todayBookings),
+        todaysClasses: todaysClasses.map((s) => ({
+          ...s,
+          fillRate:
+            s.maxCapacity && s.maxCapacity > 0
+              ? Math.round(((s.currentBookings ?? 0) / s.maxCapacity) * 100)
+              : 0,
+          spotsLeft: Math.max(
+            0,
+            (s.maxCapacity ?? 0) - (s.currentBookings ?? 0),
+          ),
+        })),
+        lowStockProducts,
       },
     });
   } catch (err) {
@@ -133,11 +254,14 @@ router.get("/reports/dashboard", requireAuth, async (req, res, next) => {
 
 router.get("/reports/revenue", requireAuth, async (req, res, next) => {
   try {
-    const from = req.query.from ? new Date(req.query.from as string) : new Date(Date.now() - 30 * 86400000);
+    const from = req.query.from
+      ? new Date(req.query.from as string)
+      : new Date(Date.now() - 30 * 86400000);
     const to = req.query.to ? new Date(req.query.to as string) : new Date();
     const groupBy = (req.query.groupBy as string) ?? "day";
 
-    const dateTrunc = groupBy === "month" ? "month" : groupBy === "week" ? "week" : "day";
+    const dateTrunc =
+      groupBy === "month" ? "month" : groupBy === "week" ? "week" : "day";
 
     const revenueData = await db.execute(sql`
       SELECT 
@@ -175,33 +299,36 @@ router.get("/reports/revenue", requireAuth, async (req, res, next) => {
 
 router.get("/reports/members", requireAuth, async (req, res, next) => {
   try {
-    const from = req.query.from ? new Date(req.query.from as string) : new Date(Date.now() - 90 * 86400000);
+    const from = req.query.from
+      ? new Date(req.query.from as string)
+      : new Date(Date.now() - 90 * 86400000);
     const to = req.query.to ? new Date(req.query.to as string) : new Date();
 
-    const [newMembers, cancelledMemberships, byGender, byPlan] = await Promise.all([
-      db.execute(sql`
-        SELECT date_trunc('week', created_at) as week, count(*) as count
-        FROM members WHERE created_at >= ${from} AND created_at <= ${to}
-        GROUP BY week ORDER BY week
-      `),
-      db.execute(sql`
-        SELECT date_trunc('week', cancelled_at) as week, count(*) as count
-        FROM memberships WHERE cancelled_at >= ${from} AND cancelled_at <= ${to}
-        GROUP BY week ORDER BY week
-      `),
-      db
-        .select({ gender: membersTable.gender, count: count() })
-        .from(membersTable)
-        .groupBy(membersTable.gender),
-      db.execute(sql`
-        SELECT p.name as plan_name, count(*) as count, ms.status
-        FROM memberships ms
-        JOIN plans p ON p.id = ms.plan_id
-        WHERE ms.created_at >= ${from}
-        GROUP BY p.name, ms.status
-        ORDER BY count DESC
-      `),
-    ]);
+    const [newMembers, cancelledMemberships, byGender, byPlan] =
+      await Promise.all([
+        db.execute(sql`
+          SELECT date_trunc('week', created_at) as week, count(*) as count
+          FROM members WHERE created_at >= ${from} AND created_at <= ${to}
+          GROUP BY week ORDER BY week
+        `),
+        db.execute(sql`
+          SELECT date_trunc('week', cancelled_at) as week, count(*) as count
+          FROM memberships WHERE cancelled_at >= ${from} AND cancelled_at <= ${to}
+          GROUP BY week ORDER BY week
+        `),
+        db
+          .select({ gender: membersTable.gender, count: count() })
+          .from(membersTable)
+          .groupBy(membersTable.gender),
+        db.execute(sql`
+          SELECT p.name as plan_name, count(*) as count, ms.status
+          FROM memberships ms
+          JOIN plans p ON p.id = ms.plan_id
+          WHERE ms.created_at >= ${from}
+          GROUP BY p.name, ms.status
+          ORDER BY count DESC
+        `),
+      ]);
 
     res.json({
       newMembers: newMembers.rows,
@@ -216,7 +343,9 @@ router.get("/reports/members", requireAuth, async (req, res, next) => {
 
 router.get("/reports/access", requireAuth, async (req, res, next) => {
   try {
-    const from = req.query.from ? new Date(req.query.from as string) : new Date(Date.now() - 30 * 86400000);
+    const from = req.query.from
+      ? new Date(req.query.from as string)
+      : new Date(Date.now() - 30 * 86400000);
     const to = req.query.to ? new Date(req.query.to as string) : new Date();
 
     const [daily, byResult, peakHours, byPoint] = await Promise.all([
@@ -246,7 +375,12 @@ router.get("/reports/access", requireAuth, async (req, res, next) => {
       `),
     ]);
 
-    res.json({ daily: daily.rows, byResult: byResult.rows, peakHours: peakHours.rows, byPoint: byPoint.rows });
+    res.json({
+      daily: daily.rows,
+      byResult: byResult.rows,
+      peakHours: peakHours.rows,
+      byPoint: byPoint.rows,
+    });
   } catch (err) {
     next(err);
   }
@@ -254,7 +388,9 @@ router.get("/reports/access", requireAuth, async (req, res, next) => {
 
 router.get("/reports/classes", requireAuth, async (req, res, next) => {
   try {
-    const from = req.query.from ? new Date(req.query.from as string) : new Date(Date.now() - 30 * 86400000);
+    const from = req.query.from
+      ? new Date(req.query.from as string)
+      : new Date(Date.now() - 30 * 86400000);
 
     const [sessionStats, bookingStats, attendanceRate] = await Promise.all([
       db.execute(sql`
@@ -281,7 +417,11 @@ router.get("/reports/classes", requireAuth, async (req, res, next) => {
       `),
     ]);
 
-    res.json({ sessionStats: sessionStats.rows, bookingStats: bookingStats.rows, attendanceRate: attendanceRate.rows });
+    res.json({
+      sessionStats: sessionStats.rows,
+      bookingStats: bookingStats.rows,
+      attendanceRate: attendanceRate.rows,
+    });
   } catch (err) {
     next(err);
   }
@@ -289,7 +429,9 @@ router.get("/reports/classes", requireAuth, async (req, res, next) => {
 
 router.get("/reports/store", requireAuth, async (req, res, next) => {
   try {
-    const from = req.query.from ? new Date(req.query.from as string) : new Date(Date.now() - 30 * 86400000);
+    const from = req.query.from
+      ? new Date(req.query.from as string)
+      : new Date(Date.now() - 30 * 86400000);
 
     const [topProducts, salesByDay, lowStock] = await Promise.all([
       db.execute(sql`
@@ -308,11 +450,20 @@ router.get("/reports/store", requireAuth, async (req, res, next) => {
       db
         .select()
         .from(productsTable)
-        .where(and(eq(productsTable.isActive, true), sql`${productsTable.stockQuantity} <= ${productsTable.lowStockThreshold}`))
+        .where(
+          and(
+            eq(productsTable.isActive, true),
+            sql`${productsTable.stockQuantity} <= ${productsTable.lowStockThreshold}`,
+          ),
+        )
         .orderBy(productsTable.stockQuantity),
     ]);
 
-    res.json({ topProducts: topProducts.rows, salesByDay: salesByDay.rows, lowStock });
+    res.json({
+      topProducts: topProducts.rows,
+      salesByDay: salesByDay.rows,
+      lowStock,
+    });
   } catch (err) {
     next(err);
   }

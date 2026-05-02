@@ -47,6 +47,7 @@ export function useDashboard() {
   return useQuery({
     queryKey: ["dashboard"],
     queryFn: () => api.get<any>("/reports/dashboard"),
+    refetchInterval: 60000,
   });
 }
 
@@ -96,7 +97,7 @@ export function useCreateMembership() {
   });
 }
 
-// Billing
+// Billing — Invoices
 export function useInvoices(page: number, limit: number, status?: string, memberId?: string) {
   return useQuery({
     queryKey: ["invoices", page, limit, status, memberId],
@@ -104,29 +105,101 @@ export function useInvoices(page: number, limit: number, status?: string, member
       const params = new URLSearchParams({ page: String(page), limit: String(limit) });
       if (status && status !== "all") params.append("status", status);
       if (memberId) params.append("memberId", memberId);
-      return api.get<any>(`/billing/invoices?${params.toString()}`);
+      return api.get<any>(`/invoices?${params.toString()}`);
     }
   });
 }
 
-export function usePayments(page: number, limit: number) {
+// Billing — Payments
+export function usePayments(page: number, limit: number, status?: string, method?: string) {
   return useQuery({
-    queryKey: ["payments", page, limit],
+    queryKey: ["payments", page, limit, status, method],
     queryFn: () => {
       const params = new URLSearchParams({ page: String(page), limit: String(limit) });
-      return api.get<any>(`/billing/payments?${params.toString()}`);
-    }
+      if (status && status !== "all") params.append("status", status);
+      if (method && method !== "all") params.append("method", method);
+      return api.get<any>(`/payments?${params.toString()}`);
+    },
+    refetchInterval: 30000,
   });
 }
 
 export function useCreatePayment() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: any) => api.post("/billing/payments", body),
+    mutationFn: ({ invoiceId, body }: { invoiceId: string; body: any }) =>
+      api.post(`/invoices/${invoiceId}/payments`, body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["payments"] });
       qc.invalidateQueries({ queryKey: ["invoices"] });
+      qc.invalidateQueries({ queryKey: ["dashboard"] });
     },
+  });
+}
+
+export function useConfirmPayment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (paymentId: string) => api.patch(`/payments/${paymentId}/confirm`, {}),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["payments"] });
+      qc.invalidateQueries({ queryKey: ["invoices"] });
+      qc.invalidateQueries({ queryKey: ["dashboard"] });
+    },
+  });
+}
+
+export function useRejectPayment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ paymentId, reason }: { paymentId: string; reason?: string }) =>
+      api.patch(`/payments/${paymentId}/reject`, { reason }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["payments"] });
+      qc.invalidateQueries({ queryKey: ["dashboard"] });
+    },
+  });
+}
+
+// Billing — Discounts
+export function useDiscounts(page: number, limit: number) {
+  return useQuery({
+    queryKey: ["discounts", page, limit],
+    queryFn: () => {
+      const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+      return api.get<any>(`/discounts?${params.toString()}`);
+    }
+  });
+}
+
+export function useCreateDiscount() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: any) => api.post("/discounts", body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["discounts"] }),
+  });
+}
+
+export function useUpdateDiscount(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: any) => api.patch(`/discounts/${id}`, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["discounts"] }),
+  });
+}
+
+export function useDeactivateDiscount() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.delete(`/discounts/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["discounts"] }),
+  });
+}
+
+export function useValidateDiscount() {
+  return useMutation({
+    mutationFn: (body: { code: string; amount?: string }) =>
+      api.post<any>("/discounts/validate", body),
   });
 }
 
@@ -139,7 +212,8 @@ export function useAccessLogs(page: number, limit: number, result?: string, acce
       if (result && result !== "all") params.append("result", result);
       if (accessPointId && accessPointId !== "all") params.append("accessPointId", accessPointId);
       return api.get<any>(`/access/logs?${params.toString()}`);
-    }
+    },
+    refetchInterval: 15000,
   });
 }
 
@@ -147,6 +221,22 @@ export function useAccessPoints() {
   return useQuery({
     queryKey: ["access-points"],
     queryFn: () => api.get<any>("/access/points"),
+    refetchInterval: 30000,
+  });
+}
+
+export function useTimeRules() {
+  return useQuery({
+    queryKey: ["time-rules"],
+    queryFn: () => api.get<any>("/access/time-rules"),
+  });
+}
+
+export function useCreateAccessPoint() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: any) => api.post("/access/points", body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["access-points"] }),
   });
 }
 
@@ -154,19 +244,58 @@ export function useAccessPoints() {
 export function useClassTypes() {
   return useQuery({
     queryKey: ["class-types"],
-    queryFn: () => api.get<any>("/classes/types"),
+    queryFn: () => api.get<any>("/class-types"),
   });
 }
 
-export function useClassSessions(page: number, limit: number, classTypeId?: string, status?: string) {
+export function useClassSessions(page: number, limit: number, classTypeId?: string, status?: string, from?: string, to?: string) {
   return useQuery({
-    queryKey: ["class-sessions", page, limit, classTypeId, status],
+    queryKey: ["class-sessions", page, limit, classTypeId, status, from, to],
     queryFn: () => {
       const params = new URLSearchParams({ page: String(page), limit: String(limit) });
       if (classTypeId && classTypeId !== "all") params.append("classTypeId", classTypeId);
       if (status && status !== "all") params.append("status", status);
-      return api.get<any>(`/classes/sessions?${params.toString()}`);
+      if (from) params.append("from", from);
+      if (to) params.append("to", to);
+      return api.get<any>(`/class-sessions?${params.toString()}`);
     }
+  });
+}
+
+export function useCreateClassSession() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: any) => api.post("/class-sessions", body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["class-sessions"] }),
+  });
+}
+
+export function useCreateRecurringSessions() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: any) => api.post<any>("/class-sessions/recurring", body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["class-sessions"] }),
+  });
+}
+
+export function useCreateClassType() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: any) => api.post("/class-types", body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["class-types"] }),
+  });
+}
+
+export function useBookings(page: number, limit: number, sessionId?: string, memberId?: string) {
+  return useQuery({
+    queryKey: ["bookings", page, limit, sessionId, memberId],
+    queryFn: () => {
+      const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+      if (sessionId) params.append("sessionId", sessionId);
+      if (memberId) params.append("memberId", memberId);
+      return api.get<any>(`/bookings?${params.toString()}`);
+    },
+    enabled: !!(sessionId || memberId),
   });
 }
 
@@ -184,18 +313,25 @@ export function useStaff(page: number, limit: number, role?: string, search?: st
 }
 
 // Store
-export function useProducts() {
+export function useProducts(page?: number, limit?: number, category?: string) {
   return useQuery({
-    queryKey: ["products"],
-    queryFn: () => api.get<any>("/store/products"),
+    queryKey: ["products", page, limit, category],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (page) params.append("page", String(page));
+      if (limit) params.append("limit", String(limit));
+      if (category && category !== "all") params.append("category", category);
+      return api.get<any>(`/store/products?${params.toString()}`);
+    }
   });
 }
 
-export function useOrders(page: number, limit: number) {
+export function useOrders(page: number, limit: number, status?: string) {
   return useQuery({
-    queryKey: ["orders", page, limit],
+    queryKey: ["orders", page, limit, status],
     queryFn: () => {
       const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+      if (status && status !== "all") params.append("status", status);
       return api.get<any>(`/store/orders?${params.toString()}`);
     }
   });
@@ -218,6 +354,52 @@ export function useRevenueReport(from?: string, to?: string, groupBy: string = "
       if (from) params.append("from", from);
       if (to) params.append("to", to);
       return api.get<any>(`/reports/revenue?${params.toString()}`);
+    }
+  });
+}
+
+export function useMembersReport(from?: string, to?: string) {
+  return useQuery({
+    queryKey: ["reports-members", from, to],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (from) params.append("from", from);
+      if (to) params.append("to", to);
+      return api.get<any>(`/reports/members?${params.toString()}`);
+    }
+  });
+}
+
+export function useAccessReport(from?: string, to?: string) {
+  return useQuery({
+    queryKey: ["reports-access", from, to],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (from) params.append("from", from);
+      if (to) params.append("to", to);
+      return api.get<any>(`/reports/access?${params.toString()}`);
+    }
+  });
+}
+
+export function useClassesReport(from?: string) {
+  return useQuery({
+    queryKey: ["reports-classes", from],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (from) params.append("from", from);
+      return api.get<any>(`/reports/classes?${params.toString()}`);
+    }
+  });
+}
+
+export function useStoreReport(from?: string) {
+  return useQuery({
+    queryKey: ["reports-store", from],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (from) params.append("from", from);
+      return api.get<any>(`/reports/store?${params.toString()}`);
     }
   });
 }

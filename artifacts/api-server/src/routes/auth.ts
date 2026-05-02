@@ -5,7 +5,7 @@ import {
   rolesTable,
   refreshTokensTable,
 } from "@workspace/db";
-import { eq, and, gt, isNull } from "drizzle-orm";
+import { eq, and, gt, isNull, ne } from "drizzle-orm";
 import { z } from "zod";
 import {
   comparePassword,
@@ -19,9 +19,10 @@ import {
 } from "../lib/auth";
 import { logAudit } from "../lib/audit";
 import { AppError } from "../lib/errors";
-import bcrypt from "bcryptjs";
 
 const router = Router();
+const MAX_FAILED_ATTEMPTS = 5;
+const LOCKOUT_DURATION_MS = 15 * 60 * 1000;
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -31,6 +32,7 @@ const loginSchema = z.object({
 router.post("/auth/login", async (req, res, next) => {
   try {
     const { email, password } = loginSchema.parse(req.body);
+    const ip = req.ip ?? req.socket?.remoteAddress ?? "unknown";
 
     const [user] = await db
       .select({
@@ -42,6 +44,8 @@ router.post("/auth/login", async (req, res, next) => {
         roleId: usersTable.roleId,
         roleName: rolesTable.name,
         isActive: usersTable.isActive,
+        failedLoginAttempts: usersTable.failedLoginAttempts,
+        lockedUntil: usersTable.lockedUntil,
       })
       .from(usersTable)
       .leftJoin(rolesTable, eq(usersTable.roleId, rolesTable.id))
@@ -51,14 +55,52 @@ router.post("/auth/login", async (req, res, next) => {
       throw new AppError(401, "Invalid credentials");
     }
 
+    if (user.lockedUntil && user.lockedUntil > new Date()) {
+      const remaining = Math.ceil(
+        (user.lockedUntil.getTime() - Date.now()) / 1000 / 60,
+      );
+      throw new AppError(
+        429,
+        `Account locked. Try again in ${remaining} minute(s).`,
+      );
+    }
+
     const valid = await comparePassword(password, user.passwordHash);
     if (!valid) {
-      throw new AppError(401, "Invalid credentials");
+      const newAttempts = (user.failedLoginAttempts ?? 0) + 1;
+      const updateData: any = {
+        failedLoginAttempts: newAttempts,
+        updatedAt: new Date(),
+      };
+      if (newAttempts >= MAX_FAILED_ATTEMPTS) {
+        updateData.lockedUntil = new Date(Date.now() + LOCKOUT_DURATION_MS);
+      }
+      await db
+        .update(usersTable)
+        .set(updateData)
+        .where(eq(usersTable.id, user.id));
+
+      if (newAttempts >= MAX_FAILED_ATTEMPTS) {
+        throw new AppError(
+          429,
+          "Account locked for 15 minutes due to too many failed attempts.",
+        );
+      }
+      const attemptsLeft = MAX_FAILED_ATTEMPTS - newAttempts;
+      throw new AppError(
+        401,
+        `Invalid credentials. ${attemptsLeft} attempt(s) remaining before lockout.`,
+      );
     }
 
     await db
       .update(usersTable)
-      .set({ lastLoginAt: new Date() })
+      .set({
+        lastLoginAt: new Date(),
+        failedLoginAttempts: 0,
+        lockedUntil: null,
+        updatedAt: new Date(),
+      })
       .where(eq(usersTable.id, user.id));
 
     const payload = {
@@ -79,6 +121,7 @@ router.post("/auth/login", async (req, res, next) => {
       action: "login",
       resource: "auth",
       resourceId: user.id,
+      newValue: { ip },
     });
 
     res.json({
@@ -107,6 +150,10 @@ router.post("/auth/refresh", async (req, res, next) => {
     const user = await getUserWithRole(decoded.sub);
     if (!user || !user.isActive) {
       throw new AppError(401, "Invalid token");
+    }
+
+    if (user.lockedUntil && user.lockedUntil > new Date()) {
+      throw new AppError(429, "Account is locked");
     }
 
     await revokeRefreshToken(user.id, refreshToken);
@@ -163,6 +210,80 @@ router.get("/auth/me", requireAuth, async (req, res, next) => {
       role: user.roleName,
       roleId: user.roleId,
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/auth/sessions", requireAuth, async (req, res, next) => {
+  try {
+    const sessions = await db
+      .select({
+        id: refreshTokensTable.id,
+        createdAt: refreshTokensTable.createdAt,
+        expiresAt: refreshTokensTable.expiresAt,
+        revokedAt: refreshTokensTable.revokedAt,
+      })
+      .from(refreshTokensTable)
+      .where(
+        and(
+          eq(refreshTokensTable.userId, req.user!.sub),
+          isNull(refreshTokensTable.revokedAt),
+          gt(refreshTokensTable.expiresAt, new Date()),
+        ),
+      )
+      .orderBy(refreshTokensTable.createdAt);
+
+    res.json(sessions);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete("/auth/sessions/:id", requireAuth, async (req, res, next) => {
+  try {
+    const [session] = await db
+      .select()
+      .from(refreshTokensTable)
+      .where(
+        and(
+          eq(refreshTokensTable.id, req.params.id),
+          eq(refreshTokensTable.userId, req.user!.sub),
+        ),
+      );
+    if (!session) throw new AppError(404, "Session not found");
+
+    await db
+      .update(refreshTokensTable)
+      .set({ revokedAt: new Date() })
+      .where(eq(refreshTokensTable.id, req.params.id));
+
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete("/auth/sessions", requireAuth, async (req, res, next) => {
+  try {
+    const { except } = z
+      .object({ except: z.string().optional() })
+      .parse(req.body);
+
+    const conditions: any[] = [
+      eq(refreshTokensTable.userId, req.user!.sub),
+      isNull(refreshTokensTable.revokedAt),
+    ];
+    if (except) {
+      conditions.push(ne(refreshTokensTable.id, except));
+    }
+
+    await db
+      .update(refreshTokensTable)
+      .set({ revokedAt: new Date() })
+      .where(and(...conditions));
+
+    res.json({ success: true, message: "All other sessions revoked" });
   } catch (err) {
     next(err);
   }
