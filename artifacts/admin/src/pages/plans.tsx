@@ -26,7 +26,7 @@ export default function Plans() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {data?.map((plan: any) => (
+          {data?.data?.map((plan: any) => (
             <Card key={plan.id} className={!plan.isActive ? "opacity-60" : ""}>
               <CardHeader>
                 <div className="flex justify-between items-start">

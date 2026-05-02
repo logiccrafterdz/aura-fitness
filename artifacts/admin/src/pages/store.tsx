@@ -63,7 +63,7 @@ export default function Store() {
                           </TableCell>
                         </TableRow>
                       ) : (
-                        productsData?.map((product: any) => {
+                        productsData?.data?.map((product: any) => {
                           const isLowStock = product.stockQuantity <= product.lowStockThreshold;
                           return (
                             <TableRow key={product.id}>

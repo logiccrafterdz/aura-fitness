@@ -53,7 +53,7 @@ export default function Memberships() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Plans</SelectItem>
-                {plansData?.map((plan: any) => (
+                {plansData?.data?.map((plan: any) => (
                   <SelectItem key={plan.id} value={plan.id}>{plan.name}</SelectItem>
                 ))}
               </SelectContent>
