@@ -11,7 +11,7 @@ import {
 } from "@workspace/db";
 import { eq, and, desc, count, sql, ilike } from "drizzle-orm";
 import { z } from "zod";
-import { requireAuth } from "../lib/auth";
+import { requireAuth, requirePermission } from "../lib/auth";
 import { logAudit } from "../lib/audit";
 import { AppError } from "../lib/errors";
 import { getPagination, paginated } from "../lib/paginate";
@@ -24,7 +24,7 @@ function generateOrderNumber(): string {
   return `ORD-${ts}${rand}`;
 }
 
-router.get("/products", requireAuth, async (req, res, next) => {
+router.get("/products", requireAuth, requirePermission("store", "read"), async (req, res, next) => {
   try {
     const { page, limit, offset } = getPagination(req);
     const search = req.query.search as string | undefined;
@@ -48,7 +48,7 @@ router.get("/products", requireAuth, async (req, res, next) => {
   }
 });
 
-router.post("/products", requireAuth, async (req, res, next) => {
+router.post("/products", requireAuth, requirePermission("store", "write"), async (req, res, next) => {
   try {
     const schema = z.object({
       name: z.string().min(1),
@@ -74,7 +74,7 @@ router.post("/products", requireAuth, async (req, res, next) => {
   }
 });
 
-router.get("/products/:id", requireAuth, async (req, res, next) => {
+router.get("/products/:id", requireAuth, requirePermission("store", "read"), async (req, res, next) => {
   try {
     const [product] = await db.select().from(productsTable).where(eq(productsTable.id, req.params.id as string));
     if (!product) throw new AppError(404, "Product not found");
@@ -87,7 +87,7 @@ router.get("/products/:id", requireAuth, async (req, res, next) => {
   }
 });
 
-router.patch("/products/:id", requireAuth, async (req, res, next) => {
+router.patch("/products/:id", requireAuth, requirePermission("store", "write"), async (req, res, next) => {
   try {
     const schema = z.object({
       name: z.string().optional(),
@@ -112,7 +112,7 @@ router.patch("/products/:id", requireAuth, async (req, res, next) => {
   }
 });
 
-router.get("/inventory/transactions", requireAuth, async (req, res, next) => {
+router.get("/inventory/transactions", requireAuth, requirePermission("store", "read"), async (req, res, next) => {
   try {
     const { page, limit, offset } = getPagination(req);
     const productId = req.query.productId as string | undefined;
@@ -146,7 +146,7 @@ router.get("/inventory/transactions", requireAuth, async (req, res, next) => {
   }
 });
 
-router.post("/inventory/transactions", requireAuth, async (req, res, next) => {
+router.post("/inventory/transactions", requireAuth, requirePermission("store", "write"), async (req, res, next) => {
   try {
     const schema = z.object({
       productId: z.string().uuid(),
@@ -184,7 +184,7 @@ router.post("/inventory/transactions", requireAuth, async (req, res, next) => {
   }
 });
 
-router.get("/pos-sessions", requireAuth, async (req, res, next) => {
+router.get("/pos-sessions", requireAuth, requirePermission("store", "read"), async (req, res, next) => {
   try {
     const rows = await db
       .select({
@@ -209,7 +209,7 @@ router.get("/pos-sessions", requireAuth, async (req, res, next) => {
   }
 });
 
-router.post("/pos-sessions", requireAuth, async (req, res, next) => {
+router.post("/pos-sessions", requireAuth, requirePermission("store", "write"), async (req, res, next) => {
   try {
     const { openingCash } = z.object({ openingCash: z.string().default("0") }).parse(req.body);
     const [session] = await db.insert(posSessionsTable).values({ cashierId: req.user!.sub, openingCash }).returning();
@@ -219,7 +219,7 @@ router.post("/pos-sessions", requireAuth, async (req, res, next) => {
   }
 });
 
-router.patch("/pos-sessions/:id/close", requireAuth, async (req, res, next) => {
+router.patch("/pos-sessions/:id/close", requireAuth, requirePermission("store", "write"), async (req, res, next) => {
   try {
     const { closingCash, notes } = z.object({ closingCash: z.string(), notes: z.string().optional() }).parse(req.body);
     const [session] = await db.select().from(posSessionsTable).where(eq(posSessionsTable.id, req.params.id as string));
@@ -233,7 +233,7 @@ router.patch("/pos-sessions/:id/close", requireAuth, async (req, res, next) => {
   }
 });
 
-router.get("/orders", requireAuth, async (req, res, next) => {
+router.get("/orders", requireAuth, requirePermission("store", "read"), async (req, res, next) => {
   try {
     const { page, limit, offset } = getPagination(req);
     const status = req.query.status as string | undefined;
@@ -271,7 +271,7 @@ router.get("/orders", requireAuth, async (req, res, next) => {
   }
 });
 
-router.post("/orders", requireAuth, async (req, res, next) => {
+router.post("/orders", requireAuth, requirePermission("store", "write"), async (req, res, next) => {
   try {
     const schema = z.object({
       memberId: z.string().uuid().optional(),
@@ -335,7 +335,7 @@ router.post("/orders", requireAuth, async (req, res, next) => {
   }
 });
 
-router.patch("/orders/:id/status", requireAuth, async (req, res, next) => {
+router.patch("/orders/:id/status", requireAuth, requirePermission("store", "write"), async (req, res, next) => {
   try {
     const { status } = z.object({ status: z.enum(["pending", "preparing", "ready", "completed", "cancelled"]) }).parse(req.body);
     const [updated] = await db.update(ordersTable).set({ status, updatedAt: new Date() }).where(eq(ordersTable.id, req.params.id as string)).returning();
