@@ -3,7 +3,7 @@ import { db } from "@workspace/db";
 import { plansTable } from "@workspace/db";
 import { eq, desc, count } from "drizzle-orm";
 import { z } from "zod";
-import { requireAuth } from "../lib/auth";
+import { requireAuth, requirePermission } from "../lib/auth";
 import { logAudit } from "../lib/audit";
 import { AppError } from "../lib/errors";
 import { getPagination, paginated } from "../lib/paginate";
@@ -33,7 +33,7 @@ const planSchema = z.object({
   isActive: z.boolean().optional(),
 });
 
-router.get("/plans", requireAuth, async (req, res, next) => {
+router.get("/plans", requireAuth, requirePermission("plans", "read"), async (req, res, next) => {
   try {
     const { page, limit, offset } = getPagination(req);
     const activeOnly = req.query.active === "true";
@@ -51,7 +51,7 @@ router.get("/plans", requireAuth, async (req, res, next) => {
   }
 });
 
-router.post("/plans", requireAuth, async (req, res, next) => {
+router.post("/plans", requireAuth, requirePermission("plans", "write"), async (req, res, next) => {
   try {
     const data = planSchema.parse(req.body);
     const [plan] = await db
@@ -66,7 +66,7 @@ router.post("/plans", requireAuth, async (req, res, next) => {
   }
 });
 
-router.get("/plans/:id", requireAuth, async (req, res, next) => {
+router.get("/plans/:id", requireAuth, requirePermission("plans", "read"), async (req, res, next) => {
   try {
     const [plan] = await db.select().from(plansTable).where(eq(plansTable.id, req.params.id as string));
     if (!plan) throw new AppError(404, "Plan not found");
@@ -76,7 +76,7 @@ router.get("/plans/:id", requireAuth, async (req, res, next) => {
   }
 });
 
-router.patch("/plans/:id", requireAuth, async (req, res, next) => {
+router.patch("/plans/:id", requireAuth, requirePermission("plans", "write"), async (req, res, next) => {
   try {
     const [existing] = await db.select().from(plansTable).where(eq(plansTable.id, req.params.id as string));
     if (!existing) throw new AppError(404, "Plan not found");
@@ -95,7 +95,7 @@ router.patch("/plans/:id", requireAuth, async (req, res, next) => {
   }
 });
 
-router.delete("/plans/:id", requireAuth, async (req, res, next) => {
+router.delete("/plans/:id", requireAuth, requirePermission("plans", "write"), async (req, res, next) => {
   try {
     const [existing] = await db.select().from(plansTable).where(eq(plansTable.id, req.params.id as string));
     if (!existing) throw new AppError(404, "Plan not found");

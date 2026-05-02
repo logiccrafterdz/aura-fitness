@@ -9,14 +9,14 @@ import {
 } from "@workspace/db";
 import { eq, and, desc, count, lt } from "drizzle-orm";
 import { z } from "zod";
-import { requireAuth } from "../lib/auth";
+import { requireAuth, requirePermission } from "../lib/auth";
 import { logAudit } from "../lib/audit";
 import { AppError } from "../lib/errors";
 import { getPagination, paginated } from "../lib/paginate";
 
 const router = Router();
 
-router.get("/memberships", requireAuth, async (req, res, next) => {
+router.get("/memberships", requireAuth, requirePermission("memberships", "read"), async (req, res, next) => {
   try {
     const { page, limit, offset } = getPagination(req);
     const status = req.query.status as string | undefined;
@@ -59,7 +59,7 @@ router.get("/memberships", requireAuth, async (req, res, next) => {
   }
 });
 
-router.post("/memberships", requireAuth, async (req, res, next) => {
+router.post("/memberships", requireAuth, requirePermission("memberships", "write"), async (req, res, next) => {
   try {
     const schema = z.object({
       memberId: z.string().uuid(),
@@ -102,7 +102,7 @@ router.post("/memberships", requireAuth, async (req, res, next) => {
   }
 });
 
-router.get("/memberships/:id", requireAuth, async (req, res, next) => {
+router.get("/memberships/:id", requireAuth, requirePermission("memberships", "read"), async (req, res, next) => {
   try {
     const [row] = await db
       .select({
@@ -133,7 +133,7 @@ router.get("/memberships/:id", requireAuth, async (req, res, next) => {
   }
 });
 
-router.patch("/memberships/:id", requireAuth, async (req, res, next) => {
+router.patch("/memberships/:id", requireAuth, requirePermission("memberships", "write"), async (req, res, next) => {
   try {
     const [existing] = await db.select().from(membershipsTable).where(eq(membershipsTable.id, req.params.id as string));
     if (!existing) throw new AppError(404, "Membership not found");
@@ -157,7 +157,7 @@ router.patch("/memberships/:id", requireAuth, async (req, res, next) => {
   }
 });
 
-router.post("/memberships/:id/freeze", requireAuth, async (req, res, next) => {
+router.post("/memberships/:id/freeze", requireAuth, requirePermission("memberships", "write"), async (req, res, next) => {
   try {
     const [membership] = await db.select().from(membershipsTable).where(eq(membershipsTable.id, req.params.id as string));
     if (!membership) throw new AppError(404, "Membership not found");
@@ -214,7 +214,7 @@ router.post("/memberships/:id/freeze", requireAuth, async (req, res, next) => {
   }
 });
 
-router.post("/memberships/:id/unfreeze", requireAuth, async (req, res, next) => {
+router.post("/memberships/:id/unfreeze", requireAuth, requirePermission("memberships", "write"), async (req, res, next) => {
   try {
     const [membership] = await db.select().from(membershipsTable).where(eq(membershipsTable.id, req.params.id as string));
     if (!membership) throw new AppError(404, "Membership not found");
@@ -239,7 +239,7 @@ router.post("/memberships/:id/unfreeze", requireAuth, async (req, res, next) => 
   }
 });
 
-router.post("/memberships/:id/cancel", requireAuth, async (req, res, next) => {
+router.post("/memberships/:id/cancel", requireAuth, requirePermission("memberships", "write"), async (req, res, next) => {
   try {
     const [membership] = await db.select().from(membershipsTable).where(eq(membershipsTable.id, req.params.id as string));
     if (!membership) throw new AppError(404, "Membership not found");
@@ -273,7 +273,7 @@ router.post("/memberships/:id/cancel", requireAuth, async (req, res, next) => {
   }
 });
 
-router.post("/memberships/:id/renew", requireAuth, async (req, res, next) => {
+router.post("/memberships/:id/renew", requireAuth, requirePermission("memberships", "write"), async (req, res, next) => {
   try {
     const [membership] = await db.select().from(membershipsTable).where(eq(membershipsTable.id, req.params.id as string));
     if (!membership) throw new AppError(404, "Membership not found");
@@ -312,7 +312,7 @@ router.post("/memberships/:id/renew", requireAuth, async (req, res, next) => {
 
 // ── FREEZE REQUESTS ────────────────────────────────────────────────────────
 
-router.get("/membership-freeze-requests", requireAuth, async (req, res, next) => {
+router.get("/membership-freeze-requests", requireAuth, requirePermission("memberships", "read"), async (req, res, next) => {
   try {
     const { page, limit, offset } = getPagination(req);
     const status = req.query.status as string | undefined;
@@ -350,7 +350,7 @@ router.get("/membership-freeze-requests", requireAuth, async (req, res, next) =>
   }
 });
 
-router.get("/memberships/:id/freeze-requests", requireAuth, async (req, res, next) => {
+router.get("/memberships/:id/freeze-requests", requireAuth, requirePermission("memberships", "read"), async (req, res, next) => {
   try {
     const rows = await db
       .select()
@@ -363,7 +363,7 @@ router.get("/memberships/:id/freeze-requests", requireAuth, async (req, res, nex
   }
 });
 
-router.post("/memberships/:id/freeze-requests", requireAuth, async (req, res, next) => {
+router.post("/memberships/:id/freeze-requests", requireAuth, requirePermission("memberships", "write"), async (req, res, next) => {
   try {
     const schema = z.object({
       freezeStart: z.string(),
@@ -421,7 +421,7 @@ router.post("/memberships/:id/freeze-requests", requireAuth, async (req, res, ne
   }
 });
 
-router.post("/membership-freeze-requests/:id/approve", requireAuth, async (req, res, next) => {
+router.post("/membership-freeze-requests/:id/approve", requireAuth, requirePermission("memberships", "write"), async (req, res, next) => {
   try {
     const { adminNotes } = z.object({ adminNotes: z.string().optional() }).parse(req.body);
 
@@ -488,7 +488,7 @@ router.post("/membership-freeze-requests/:id/approve", requireAuth, async (req, 
   }
 });
 
-router.post("/membership-freeze-requests/:id/reject", requireAuth, async (req, res, next) => {
+router.post("/membership-freeze-requests/:id/reject", requireAuth, requirePermission("memberships", "write"), async (req, res, next) => {
   try {
     const { adminNotes } = z.object({ adminNotes: z.string().optional() }).parse(req.body);
 
@@ -523,7 +523,7 @@ router.post("/membership-freeze-requests/:id/reject", requireAuth, async (req, r
   }
 });
 
-router.post("/memberships/auto-expire", requireAuth, async (req, res, next) => {
+router.post("/memberships/auto-expire", requireAuth, requirePermission("memberships", "write"), async (req, res, next) => {
   try {
     const now = new Date();
 
