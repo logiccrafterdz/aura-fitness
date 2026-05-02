@@ -10,13 +10,13 @@ import {
 } from "@workspace/db";
 import { eq, and, desc, count, asc, gte, lte } from "drizzle-orm";
 import { z } from "zod";
-import { requireAuth } from "../lib/auth";
+import { requireAuth, requirePermission } from "../lib/auth";
 import { AppError } from "../lib/errors";
 import { getPagination, paginated } from "../lib/paginate";
 
 const router = Router();
 
-router.get("/class-types", requireAuth, async (req, res, next) => {
+router.get("/class-types", requireAuth, requirePermission("classes", "read"), async (req, res, next) => {
   try {
     const rows = await db
       .select()
@@ -29,7 +29,7 @@ router.get("/class-types", requireAuth, async (req, res, next) => {
   }
 });
 
-router.post("/class-types", requireAuth, async (req, res, next) => {
+router.post("/class-types", requireAuth, requirePermission("classes", "write"), async (req, res, next) => {
   try {
     const schema = z.object({
       name: z.string().min(1),
@@ -52,7 +52,7 @@ router.post("/class-types", requireAuth, async (req, res, next) => {
   }
 });
 
-router.patch("/class-types/:id", requireAuth, async (req, res, next) => {
+router.patch("/class-types/:id", requireAuth, requirePermission("classes", "write"), async (req, res, next) => {
   try {
     const schema = z.object({
       name: z.string().optional(),
@@ -77,7 +77,7 @@ router.patch("/class-types/:id", requireAuth, async (req, res, next) => {
   }
 });
 
-router.get("/class-sessions", requireAuth, async (req, res, next) => {
+router.get("/class-sessions", requireAuth, requirePermission("classes", "read"), async (req, res, next) => {
   try {
     const { page, limit, offset } = getPagination(req);
     const from = req.query.from as string | undefined;
@@ -130,7 +130,7 @@ router.get("/class-sessions", requireAuth, async (req, res, next) => {
   }
 });
 
-router.post("/class-sessions", requireAuth, async (req, res, next) => {
+router.post("/class-sessions", requireAuth, requirePermission("classes", "write"), async (req, res, next) => {
   try {
     const schema = z.object({
       classTypeId: z.string().uuid(),
@@ -169,6 +169,7 @@ router.post("/class-sessions", requireAuth, async (req, res, next) => {
 router.post(
   "/class-sessions/recurring",
   requireAuth,
+  requirePermission("classes", "write"),
   async (req, res, next) => {
     try {
       const schema = z.object({
@@ -251,7 +252,7 @@ router.post(
   },
 );
 
-router.get("/class-sessions/:id", requireAuth, async (req, res, next) => {
+router.get("/class-sessions/:id", requireAuth, requirePermission("classes", "read"), async (req, res, next) => {
   try {
     const [session] = await db
       .select({
@@ -319,7 +320,7 @@ router.get("/class-sessions/:id", requireAuth, async (req, res, next) => {
   }
 });
 
-router.patch("/class-sessions/:id", requireAuth, async (req, res, next) => {
+router.patch("/class-sessions/:id", requireAuth, requirePermission("classes", "write"), async (req, res, next) => {
   try {
     const schema = z.object({
       trainerId: z.string().uuid().optional(),
@@ -350,7 +351,7 @@ router.patch("/class-sessions/:id", requireAuth, async (req, res, next) => {
   }
 });
 
-router.get("/bookings", requireAuth, async (req, res, next) => {
+router.get("/bookings", requireAuth, requirePermission("classes", "read"), async (req, res, next) => {
   try {
     const { page, limit, offset } = getPagination(req);
     const sessionId = req.query.sessionId as string | undefined;
@@ -397,7 +398,7 @@ router.get("/bookings", requireAuth, async (req, res, next) => {
   }
 });
 
-router.post("/bookings", requireAuth, async (req, res, next) => {
+router.post("/bookings", requireAuth, requirePermission("classes", "write"), async (req, res, next) => {
   try {
     const schema = z.object({
       memberId: z.string().uuid(),
@@ -465,7 +466,7 @@ router.post("/bookings", requireAuth, async (req, res, next) => {
   }
 });
 
-router.delete("/bookings/:id", requireAuth, async (req, res, next) => {
+router.delete("/bookings/:id", requireAuth, requirePermission("classes", "write"), async (req, res, next) => {
   try {
     const { reason } = z
       .object({ reason: z.string().optional() })
@@ -527,6 +528,7 @@ router.delete("/bookings/:id", requireAuth, async (req, res, next) => {
 router.patch(
   "/bookings/:id/attendance",
   requireAuth,
+  requirePermission("classes", "write"),
   async (req, res, next) => {
     try {
       const { status } = z
