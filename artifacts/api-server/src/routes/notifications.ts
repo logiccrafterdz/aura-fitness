@@ -3,13 +3,13 @@ import { db } from "@workspace/db";
 import { notificationTemplatesTable, notificationRecordsTable, membersTable } from "@workspace/db";
 import { eq, desc, count, and } from "drizzle-orm";
 import { z } from "zod";
-import { requireAuth } from "../lib/auth";
+import { requireAuth, requirePermission } from "../lib/auth";
 import { AppError } from "../lib/errors";
 import { getPagination, paginated } from "../lib/paginate";
 
 const router = Router();
 
-router.get("/notification-templates", requireAuth, async (req, res, next) => {
+router.get("/notification-templates", requireAuth, requirePermission("notifications", "read"), async (req, res, next) => {
   try {
     const rows = await db.select().from(notificationTemplatesTable).orderBy(notificationTemplatesTable.eventTrigger);
     res.json(rows);
@@ -18,7 +18,7 @@ router.get("/notification-templates", requireAuth, async (req, res, next) => {
   }
 });
 
-router.post("/notification-templates", requireAuth, async (req, res, next) => {
+router.post("/notification-templates", requireAuth, requirePermission("notifications", "write"), async (req, res, next) => {
   try {
     const schema = z.object({
       key: z.string().min(1),
@@ -38,7 +38,7 @@ router.post("/notification-templates", requireAuth, async (req, res, next) => {
   }
 });
 
-router.patch("/notification-templates/:id", requireAuth, async (req, res, next) => {
+router.patch("/notification-templates/:id", requireAuth, requirePermission("notifications", "write"), async (req, res, next) => {
   try {
     const schema = z.object({
       titleAr: z.string().optional(),
@@ -61,7 +61,7 @@ router.patch("/notification-templates/:id", requireAuth, async (req, res, next) 
   }
 });
 
-router.get("/notification-records", requireAuth, async (req, res, next) => {
+router.get("/notification-records", requireAuth, requirePermission("notifications", "read"), async (req, res, next) => {
   try {
     const { page, limit, offset } = getPagination(req);
     const memberId = req.query.memberId as string | undefined;
@@ -97,7 +97,7 @@ router.get("/notification-records", requireAuth, async (req, res, next) => {
   }
 });
 
-router.post("/notifications/send", requireAuth, async (req, res, next) => {
+router.post("/notifications/send", requireAuth, requirePermission("notifications", "write"), async (req, res, next) => {
   try {
     const schema = z.object({
       eventTrigger: z.string().min(1),
