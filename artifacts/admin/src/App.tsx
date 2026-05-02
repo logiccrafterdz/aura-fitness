@@ -42,7 +42,7 @@ function Router() {
       <Route path="/kiosk" component={Kiosk} />
       <Route path="/portal/:memberNumber" component={Portal} />
 
-      <Route path="/">
+      <Route path="/" nest>
         <ProtectedRoute>
           <AppLayout>
             <Switch>
