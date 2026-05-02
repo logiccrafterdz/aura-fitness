@@ -12,7 +12,7 @@ import {
 } from "@workspace/db";
 import { eq, and, desc, count, sql, gte, lt, lte } from "drizzle-orm";
 import { z } from "zod";
-import { requireAuth } from "../lib/auth";
+import { requireAuth, requirePermission } from "../lib/auth";
 import { logAudit } from "../lib/audit";
 import { AppError } from "../lib/errors";
 import { getPagination, paginated } from "../lib/paginate";
@@ -27,7 +27,7 @@ function generateInvoiceNumber(): string {
   return `INV-${y}${m}-${rand}`;
 }
 
-router.get("/invoices", requireAuth, async (req, res, next) => {
+router.get("/invoices", requireAuth, requirePermission("billing", "read"), async (req, res, next) => {
   try {
     const { page, limit, offset } = getPagination(req);
     const status = req.query.status as string | undefined;
@@ -67,7 +67,7 @@ router.get("/invoices", requireAuth, async (req, res, next) => {
   }
 });
 
-router.post("/invoices", requireAuth, async (req, res, next) => {
+router.post("/invoices", requireAuth, requirePermission("billing", "write"), async (req, res, next) => {
   try {
     const schema = z.object({
       memberId: z.string().uuid(),
@@ -182,7 +182,7 @@ router.post("/invoices", requireAuth, async (req, res, next) => {
   }
 });
 
-router.get("/invoices/:id", requireAuth, async (req, res, next) => {
+router.get("/invoices/:id", requireAuth, requirePermission("billing", "read"), async (req, res, next) => {
   try {
     const [invoice] = await db
       .select({
@@ -221,7 +221,7 @@ router.get("/invoices/:id", requireAuth, async (req, res, next) => {
   }
 });
 
-router.patch("/invoices/:id", requireAuth, async (req, res, next) => {
+router.patch("/invoices/:id", requireAuth, requirePermission("billing", "write"), async (req, res, next) => {
   try {
     const [existing] = await db
       .select()
@@ -262,7 +262,7 @@ router.patch("/invoices/:id", requireAuth, async (req, res, next) => {
   }
 });
 
-router.post("/invoices/:id/payments", requireAuth, async (req, res, next) => {
+router.post("/invoices/:id/payments", requireAuth, requirePermission("billing", "write"), async (req, res, next) => {
   try {
     const [invoice] = await db
       .select()
@@ -335,7 +335,7 @@ router.post("/invoices/:id/payments", requireAuth, async (req, res, next) => {
   }
 });
 
-router.get("/payments", requireAuth, async (req, res, next) => {
+router.get("/payments", requireAuth, requirePermission("billing", "read"), async (req, res, next) => {
   try {
     const { page, limit, offset } = getPagination(req);
     const status = req.query.status as string | undefined;
@@ -381,7 +381,7 @@ router.get("/payments", requireAuth, async (req, res, next) => {
   }
 });
 
-router.patch("/payments/:id/confirm", requireAuth, async (req, res, next) => {
+router.patch("/payments/:id/confirm", requireAuth, requirePermission("billing", "write"), async (req, res, next) => {
   try {
     const [payment] = await db
       .select()
@@ -445,7 +445,7 @@ router.patch("/payments/:id/confirm", requireAuth, async (req, res, next) => {
   }
 });
 
-router.patch("/payments/:id/reject", requireAuth, async (req, res, next) => {
+router.patch("/payments/:id/reject", requireAuth, requirePermission("billing", "write"), async (req, res, next) => {
   try {
     const [payment] = await db
       .select()
@@ -481,7 +481,7 @@ router.patch("/payments/:id/reject", requireAuth, async (req, res, next) => {
   }
 });
 
-router.get("/discounts", requireAuth, async (req, res, next) => {
+router.get("/discounts", requireAuth, requirePermission("billing", "read"), async (req, res, next) => {
   try {
     const { page, limit, offset } = getPagination(req);
     const [rows, [{ total }]] = await Promise.all([
@@ -499,7 +499,7 @@ router.get("/discounts", requireAuth, async (req, res, next) => {
   }
 });
 
-router.post("/discounts", requireAuth, async (req, res, next) => {
+router.post("/discounts", requireAuth, requirePermission("billing", "write"), async (req, res, next) => {
   try {
     const schema = z.object({
       code: z.string().min(2).max(30).toUpperCase(),
@@ -545,7 +545,7 @@ router.post("/discounts", requireAuth, async (req, res, next) => {
   }
 });
 
-router.patch("/discounts/:id", requireAuth, async (req, res, next) => {
+router.patch("/discounts/:id", requireAuth, requirePermission("billing", "write"), async (req, res, next) => {
   try {
     const schema = z.object({
       description: z.string().optional(),
@@ -577,7 +577,7 @@ router.patch("/discounts/:id", requireAuth, async (req, res, next) => {
   }
 });
 
-router.delete("/discounts/:id", requireAuth, async (req, res, next) => {
+router.delete("/discounts/:id", requireAuth, requirePermission("billing", "write"), async (req, res, next) => {
   try {
     const [updated] = await db
       .update(discountsTable)
@@ -597,7 +597,7 @@ router.delete("/discounts/:id", requireAuth, async (req, res, next) => {
   }
 });
 
-router.post("/discounts/validate", requireAuth, async (req, res, next) => {
+router.post("/discounts/validate", requireAuth, requirePermission("billing", "read"), async (req, res, next) => {
   try {
     const schema = z.object({
       code: z.string(),
@@ -657,7 +657,7 @@ router.post("/discounts/validate", requireAuth, async (req, res, next) => {
 
 // ── CASH RECONCILIATIONS ───────────────────────────────────────────────────
 
-router.get("/cash-reconciliations", requireAuth, async (req, res, next) => {
+router.get("/cash-reconciliations", requireAuth, requirePermission("billing", "read"), async (req, res, next) => {
   try {
     const { page, limit, offset } = getPagination(req);
     const [rows, [{ total }]] = await Promise.all([
@@ -675,7 +675,7 @@ router.get("/cash-reconciliations", requireAuth, async (req, res, next) => {
   }
 });
 
-router.get("/cash-reconciliations/current", requireAuth, async (req, res, next) => {
+router.get("/cash-reconciliations/current", requireAuth, requirePermission("billing", "read"), async (req, res, next) => {
   try {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -693,7 +693,7 @@ router.get("/cash-reconciliations/current", requireAuth, async (req, res, next) 
   }
 });
 
-router.get("/cash-reconciliations/:id", requireAuth, async (req, res, next) => {
+router.get("/cash-reconciliations/:id", requireAuth, requirePermission("billing", "read"), async (req, res, next) => {
   try {
     const [row] = await db
       .select()
@@ -706,7 +706,7 @@ router.get("/cash-reconciliations/:id", requireAuth, async (req, res, next) => {
   }
 });
 
-router.post("/cash-reconciliations", requireAuth, async (req, res, next) => {
+router.post("/cash-reconciliations", requireAuth, requirePermission("billing", "write"), async (req, res, next) => {
   try {
     const schema = z.object({
       date: z.string().optional(),
@@ -740,7 +740,7 @@ router.post("/cash-reconciliations", requireAuth, async (req, res, next) => {
   }
 });
 
-router.patch("/cash-reconciliations/:id", requireAuth, async (req, res, next) => {
+router.patch("/cash-reconciliations/:id", requireAuth, requirePermission("billing", "write"), async (req, res, next) => {
   try {
     const schema = z.object({
       closingBalance: z.string().optional(),
