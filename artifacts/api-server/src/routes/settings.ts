@@ -3,14 +3,14 @@ import { db } from "@workspace/db";
 import { systemConfigTable, businessRulesTable, auditLogsTable, usersTable } from "@workspace/db";
 import { eq, desc, and, count, ilike, or } from "drizzle-orm";
 import { z } from "zod";
-import { requireAuth } from "../lib/auth";
+import { requireAuth, requirePermission } from "../lib/auth";
 import { logAudit } from "../lib/audit";
 import { AppError } from "../lib/errors";
 import { getPagination, paginated } from "../lib/paginate";
 
 const router = Router();
 
-router.get("/settings", requireAuth, async (req, res, next) => {
+router.get("/settings", requireAuth, requirePermission("settings", "read"), async (req, res, next) => {
   try {
     const rows = await db.select().from(systemConfigTable).orderBy(systemConfigTable.category, systemConfigTable.key);
     const grouped: Record<string, Record<string, string>> = {};
@@ -24,7 +24,7 @@ router.get("/settings", requireAuth, async (req, res, next) => {
   }
 });
 
-router.patch("/settings", requireAuth, async (req, res, next) => {
+router.patch("/settings", requireAuth, requirePermission("settings", "write"), async (req, res, next) => {
   try {
     const schema = z.record(z.string(), z.string());
     const updates = schema.parse(req.body);
@@ -43,7 +43,7 @@ router.patch("/settings", requireAuth, async (req, res, next) => {
   }
 });
 
-router.get("/business-rules", requireAuth, async (req, res, next) => {
+router.get("/business-rules", requireAuth, requirePermission("settings", "read"), async (req, res, next) => {
   try {
     const rows = await db.select().from(businessRulesTable).orderBy(businessRulesTable.category, businessRulesTable.key);
     res.json(rows);
@@ -52,7 +52,7 @@ router.get("/business-rules", requireAuth, async (req, res, next) => {
   }
 });
 
-router.patch("/business-rules/:key", requireAuth, async (req, res, next) => {
+router.patch("/business-rules/:key", requireAuth, requirePermission("settings", "write"), async (req, res, next) => {
   try {
     const { value, description } = z.object({ value: z.string(), description: z.string().optional() }).parse(req.body);
 
@@ -78,7 +78,7 @@ router.patch("/business-rules/:key", requireAuth, async (req, res, next) => {
   }
 });
 
-router.get("/audit-logs", requireAuth, async (req, res, next) => {
+router.get("/audit-logs", requireAuth, requirePermission("settings", "read"), async (req, res, next) => {
   try {
     const { page, limit, offset } = getPagination(req);
     const resource = req.query.resource as string | undefined;
@@ -120,7 +120,7 @@ router.get("/audit-logs", requireAuth, async (req, res, next) => {
   }
 });
 
-router.get("/audit-logs/:id", requireAuth, async (req, res, next) => {
+router.get("/audit-logs/:id", requireAuth, requirePermission("settings", "read"), async (req, res, next) => {
   try {
     const [log] = await db.select().from(auditLogsTable).where(eq(auditLogsTable.id, req.params.id as string));
     if (!log) throw new AppError(404, "Audit log not found");
