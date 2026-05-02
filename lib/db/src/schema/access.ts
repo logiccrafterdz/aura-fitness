@@ -9,7 +9,6 @@ import {
   jsonb,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
-import { z } from "zod";
 import { membersTable } from "./members";
 import { usersTable } from "./users";
 
@@ -95,4 +94,4 @@ export type AccessPoint = typeof accessPointsTable.$inferSelect;
 export type AccessToken = typeof accessTokensTable.$inferSelect;
 export type AccessLog = typeof accessLogsTable.$inferSelect;
 export type TimeRule = typeof timeRulesTable.$inferSelect;
-export type InsertAccessPoint = z.infer<typeof insertAccessPointSchema>;
+export type InsertAccessPoint = typeof accessPointsTable.$inferInsert;

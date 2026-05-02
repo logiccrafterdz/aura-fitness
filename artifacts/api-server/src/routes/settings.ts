@@ -56,20 +56,20 @@ router.patch("/business-rules/:key", requireAuth, async (req, res, next) => {
   try {
     const { value, description } = z.object({ value: z.string(), description: z.string().optional() }).parse(req.body);
 
-    const [existing] = await db.select().from(businessRulesTable).where(eq(businessRulesTable.key, req.params.key));
+    const [existing] = await db.select().from(businessRulesTable).where(eq(businessRulesTable.key, req.params.key as string));
 
     if (existing) {
       const [updated] = await db
         .update(businessRulesTable)
         .set({ value, description, updatedBy: req.user!.sub, updatedAt: new Date() })
-        .where(eq(businessRulesTable.key, req.params.key))
+        .where(eq(businessRulesTable.key, req.params.key as string))
         .returning();
-      await logAudit({ req, action: "update", resource: "business_rules", resourceId: req.params.key, oldValue: existing, newValue: updated });
+      await logAudit({ req, action: "update", resource: "business_rules", resourceId: req.params.key as string, oldValue: existing, newValue: updated });
       res.json(updated);
     } else {
       const [created] = await db
         .insert(businessRulesTable)
-        .values({ key: req.params.key, value, description, updatedBy: req.user!.sub })
+        .values({ key: req.params.key as string, value, description, updatedBy: req.user!.sub })
         .returning();
       res.status(201).json(created);
     }
@@ -122,7 +122,7 @@ router.get("/audit-logs", requireAuth, async (req, res, next) => {
 
 router.get("/audit-logs/:id", requireAuth, async (req, res, next) => {
   try {
-    const [log] = await db.select().from(auditLogsTable).where(eq(auditLogsTable.id, req.params.id));
+    const [log] = await db.select().from(auditLogsTable).where(eq(auditLogsTable.id, req.params.id as string));
     if (!log) throw new AppError(404, "Audit log not found");
     res.json(log);
   } catch (err) {

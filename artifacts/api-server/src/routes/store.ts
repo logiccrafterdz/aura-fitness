@@ -76,10 +76,10 @@ router.post("/products", requireAuth, async (req, res, next) => {
 
 router.get("/products/:id", requireAuth, async (req, res, next) => {
   try {
-    const [product] = await db.select().from(productsTable).where(eq(productsTable.id, req.params.id));
+    const [product] = await db.select().from(productsTable).where(eq(productsTable.id, req.params.id as string));
     if (!product) throw new AppError(404, "Product not found");
     const recentTxns = await db.select().from(inventoryTransactionsTable)
-      .where(eq(inventoryTransactionsTable.productId, req.params.id))
+      .where(eq(inventoryTransactionsTable.productId, req.params.id as string))
       .orderBy(desc(inventoryTransactionsTable.createdAt)).limit(10);
     res.json({ ...product, recentTransactions: recentTxns });
   } catch (err) {
@@ -104,7 +104,7 @@ router.patch("/products/:id", requireAuth, async (req, res, next) => {
     const updateData: any = { ...data, updatedAt: new Date() };
     if (data.expiryDate) updateData.expiryDate = new Date(data.expiryDate);
 
-    const [updated] = await db.update(productsTable).set(updateData).where(eq(productsTable.id, req.params.id)).returning();
+    const [updated] = await db.update(productsTable).set(updateData).where(eq(productsTable.id, req.params.id as string)).returning();
     if (!updated) throw new AppError(404, "Product not found");
     res.json(updated);
   } catch (err) {
@@ -222,11 +222,11 @@ router.post("/pos-sessions", requireAuth, async (req, res, next) => {
 router.patch("/pos-sessions/:id/close", requireAuth, async (req, res, next) => {
   try {
     const { closingCash, notes } = z.object({ closingCash: z.string(), notes: z.string().optional() }).parse(req.body);
-    const [session] = await db.select().from(posSessionsTable).where(eq(posSessionsTable.id, req.params.id));
+    const [session] = await db.select().from(posSessionsTable).where(eq(posSessionsTable.id, req.params.id as string));
     if (!session) throw new AppError(404, "POS session not found");
     if (session.status === "closed") throw new AppError(400, "Session already closed");
 
-    const [updated] = await db.update(posSessionsTable).set({ closedAt: new Date(), closingCash, status: "closed", notes }).where(eq(posSessionsTable.id, req.params.id)).returning();
+    const [updated] = await db.update(posSessionsTable).set({ closedAt: new Date(), closingCash, status: "closed", notes }).where(eq(posSessionsTable.id, req.params.id as string)).returning();
     res.json(updated);
   } catch (err) {
     next(err);
@@ -338,7 +338,7 @@ router.post("/orders", requireAuth, async (req, res, next) => {
 router.patch("/orders/:id/status", requireAuth, async (req, res, next) => {
   try {
     const { status } = z.object({ status: z.enum(["pending", "preparing", "ready", "completed", "cancelled"]) }).parse(req.body);
-    const [updated] = await db.update(ordersTable).set({ status, updatedAt: new Date() }).where(eq(ordersTable.id, req.params.id)).returning();
+    const [updated] = await db.update(ordersTable).set({ status, updatedAt: new Date() }).where(eq(ordersTable.id, req.params.id as string)).returning();
     if (!updated) throw new AppError(404, "Order not found");
     res.json(updated);
   } catch (err) {

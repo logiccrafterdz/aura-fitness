@@ -21,6 +21,10 @@ import Store from "@/pages/store";
 import Notifications from "@/pages/notifications";
 import Reports from "@/pages/reports";
 import Settings from "@/pages/settings";
+import Kiosk from "@/pages/kiosk";
+import Portal from "@/pages/portal";
+import FreezeRequests from "@/pages/freeze-requests";
+import CashReconciliation from "@/pages/cash-reconciliation";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -35,7 +39,9 @@ function Router() {
   return (
     <Switch>
       <Route path="/login" component={Login} />
-      
+      <Route path="/kiosk" component={Kiosk} />
+      <Route path="/portal/:memberNumber" component={Portal} />
+
       <Route path="/">
         <ProtectedRoute>
           <AppLayout>
@@ -50,6 +56,8 @@ function Router() {
               <Route path="/classes" component={Classes} />
               <Route path="/staff" component={Staff} />
               <Route path="/store" component={Store} />
+              <Route path="/freeze-requests" component={FreezeRequests} />
+              <Route path="/cash-reconciliation" component={CashReconciliation} />
               <Route path="/notifications" component={Notifications} />
               <Route path="/reports" component={Reports} />
               <Route path="/settings" component={Settings} />

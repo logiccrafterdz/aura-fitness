@@ -8,6 +8,7 @@ import {
   membersTable,
   membershipsTable,
   memberTimelineEventsTable,
+  cashReconciliationsTable,
 } from "@workspace/db";
 import { eq, and, desc, count, sql, gte, lt, lte } from "drizzle-orm";
 import { z } from "zod";
@@ -202,17 +203,17 @@ router.get("/invoices/:id", requireAuth, async (req, res, next) => {
       })
       .from(invoicesTable)
       .leftJoin(membersTable, eq(invoicesTable.memberId, membersTable.id))
-      .where(eq(invoicesTable.id, req.params.id));
+      .where(eq(invoicesTable.id, req.params.id as string));
     if (!invoice) throw new AppError(404, "Invoice not found");
 
     const items = await db
       .select()
       .from(invoiceItemsTable)
-      .where(eq(invoiceItemsTable.invoiceId, req.params.id));
+      .where(eq(invoiceItemsTable.invoiceId, req.params.id as string));
     const payments = await db
       .select()
       .from(paymentsTable)
-      .where(eq(paymentsTable.invoiceId, req.params.id));
+      .where(eq(paymentsTable.invoiceId, req.params.id as string));
 
     res.json({ ...invoice, items, payments });
   } catch (err) {
@@ -225,7 +226,7 @@ router.patch("/invoices/:id", requireAuth, async (req, res, next) => {
     const [existing] = await db
       .select()
       .from(invoicesTable)
-      .where(eq(invoicesTable.id, req.params.id));
+      .where(eq(invoicesTable.id, req.params.id as string));
     if (!existing) throw new AppError(404, "Invoice not found");
 
     const schema = z.object({
@@ -245,13 +246,13 @@ router.patch("/invoices/:id", requireAuth, async (req, res, next) => {
     const [updated] = await db
       .update(invoicesTable)
       .set(updateData)
-      .where(eq(invoicesTable.id, req.params.id))
+      .where(eq(invoicesTable.id, req.params.id as string))
       .returning();
     await logAudit({
       req,
       action: "update",
       resource: "invoices",
-      resourceId: req.params.id,
+      resourceId: req.params.id as string,
       oldValue: existing,
       newValue: updated,
     });
@@ -266,7 +267,7 @@ router.post("/invoices/:id/payments", requireAuth, async (req, res, next) => {
     const [invoice] = await db
       .select()
       .from(invoicesTable)
-      .where(eq(invoicesTable.id, req.params.id));
+      .where(eq(invoicesTable.id, req.params.id as string));
     if (!invoice) throw new AppError(404, "Invoice not found");
 
     const schema = z.object({
@@ -385,7 +386,7 @@ router.patch("/payments/:id/confirm", requireAuth, async (req, res, next) => {
     const [payment] = await db
       .select()
       .from(paymentsTable)
-      .where(eq(paymentsTable.id, req.params.id));
+      .where(eq(paymentsTable.id, req.params.id as string));
     if (!payment) throw new AppError(404, "Payment not found");
     if (payment.status !== "pending")
       throw new AppError(400, "Payment is not pending");
@@ -398,7 +399,7 @@ router.patch("/payments/:id/confirm", requireAuth, async (req, res, next) => {
         confirmedAt: new Date(),
         updatedAt: new Date(),
       })
-      .where(eq(paymentsTable.id, req.params.id))
+      .where(eq(paymentsTable.id, req.params.id as string))
       .returning();
 
     const [invoice] = await db
@@ -436,7 +437,7 @@ router.patch("/payments/:id/confirm", requireAuth, async (req, res, next) => {
       req,
       action: "confirm",
       resource: "payments",
-      resourceId: req.params.id,
+      resourceId: req.params.id as string,
     });
     res.json(updated);
   } catch (err) {
@@ -449,7 +450,7 @@ router.patch("/payments/:id/reject", requireAuth, async (req, res, next) => {
     const [payment] = await db
       .select()
       .from(paymentsTable)
-      .where(eq(paymentsTable.id, req.params.id));
+      .where(eq(paymentsTable.id, req.params.id as string));
     if (!payment) throw new AppError(404, "Payment not found");
     if (payment.status !== "pending")
       throw new AppError(400, "Payment is not pending");
@@ -465,14 +466,14 @@ router.patch("/payments/:id/reject", requireAuth, async (req, res, next) => {
         rejectionReason: reason,
         updatedAt: new Date(),
       })
-      .where(eq(paymentsTable.id, req.params.id))
+      .where(eq(paymentsTable.id, req.params.id as string))
       .returning();
 
     await logAudit({
       req,
       action: "reject",
       resource: "payments",
-      resourceId: req.params.id,
+      resourceId: req.params.id as string,
     });
     res.json(updated);
   } catch (err) {
@@ -559,7 +560,7 @@ router.patch("/discounts/:id", requireAuth, async (req, res, next) => {
     const [updated] = await db
       .update(discountsTable)
       .set(updateData)
-      .where(eq(discountsTable.id, req.params.id))
+      .where(eq(discountsTable.id, req.params.id as string))
       .returning();
     if (!updated) throw new AppError(404, "Discount not found");
 
@@ -567,7 +568,7 @@ router.patch("/discounts/:id", requireAuth, async (req, res, next) => {
       req,
       action: "update",
       resource: "discounts",
-      resourceId: req.params.id,
+      resourceId: req.params.id as string,
       newValue: updated,
     });
     res.json(updated);
@@ -581,14 +582,14 @@ router.delete("/discounts/:id", requireAuth, async (req, res, next) => {
     const [updated] = await db
       .update(discountsTable)
       .set({ isActive: false })
-      .where(eq(discountsTable.id, req.params.id))
+      .where(eq(discountsTable.id, req.params.id as string))
       .returning();
     if (!updated) throw new AppError(404, "Discount not found");
     await logAudit({
       req,
       action: "deactivate",
       resource: "discounts",
-      resourceId: req.params.id,
+      resourceId: req.params.id as string,
     });
     res.json({ success: true });
   } catch (err) {
@@ -649,6 +650,148 @@ router.post("/discounts/validate", requireAuth, async (req, res, next) => {
       discountAmount: discountAmount.toFixed(2),
       description: disc.description,
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── CASH RECONCILIATIONS ───────────────────────────────────────────────────
+
+router.get("/cash-reconciliations", requireAuth, async (req, res, next) => {
+  try {
+    const { page, limit, offset } = getPagination(req);
+    const [rows, [{ total }]] = await Promise.all([
+      db
+        .select()
+        .from(cashReconciliationsTable)
+        .orderBy(desc(cashReconciliationsTable.date))
+        .limit(limit)
+        .offset(offset),
+      db.select({ total: count() }).from(cashReconciliationsTable),
+    ]);
+    res.json(paginated(rows, Number(total), page, limit));
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/cash-reconciliations/current", requireAuth, async (req, res, next) => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayStr = today.toISOString().split("T")[0];
+    const [current] = await db
+      .select()
+      .from(cashReconciliationsTable)
+      .where(eq(cashReconciliationsTable.date, todayStr))
+      .orderBy(desc(cashReconciliationsTable.openedAt))
+      .limit(1);
+
+    res.json(current ?? null);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/cash-reconciliations/:id", requireAuth, async (req, res, next) => {
+  try {
+    const [row] = await db
+      .select()
+      .from(cashReconciliationsTable)
+      .where(eq(cashReconciliationsTable.id, req.params.id as string));
+    if (!row) throw new AppError(404, "Reconciliation not found");
+    res.json(row);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/cash-reconciliations", requireAuth, async (req, res, next) => {
+  try {
+    const schema = z.object({
+      date: z.string().optional(),
+      openingBalance: z.string().default("0"),
+      notes: z.string().optional(),
+    });
+    const data = schema.parse(req.body);
+    const reconcDate = data.date ?? new Date().toISOString().split("T")[0];
+
+    const [row] = await db
+      .insert(cashReconciliationsTable)
+      .values({
+        date: reconcDate,
+        openingBalance: data.openingBalance,
+        openedBy: req.user!.sub,
+        notes: data.notes,
+        status: "open",
+      })
+      .returning();
+
+    await logAudit({
+      req,
+      action: "create",
+      resource: "cash_reconciliations",
+      resourceId: row.id,
+      newValue: row,
+    });
+    res.status(201).json(row);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.patch("/cash-reconciliations/:id", requireAuth, async (req, res, next) => {
+  try {
+    const schema = z.object({
+      closingBalance: z.string().optional(),
+      cashIn: z.string().optional(),
+      cashOut: z.string().optional(),
+      expectedBalance: z.string().optional(),
+      discrepancy: z.string().optional(),
+      status: z.enum(["open", "closed", "disputed"]).optional(),
+      notes: z.string().optional(),
+    });
+    const data = schema.parse(req.body);
+
+    const [existing] = await db
+      .select()
+      .from(cashReconciliationsTable)
+      .where(eq(cashReconciliationsTable.id, req.params.id as string));
+    if (!existing) throw new AppError(404, "Reconciliation not found");
+
+    const updateData: any = { ...data };
+    if (data.status === "closed") {
+      updateData.closedAt = new Date();
+      updateData.closedBy = req.user!.sub;
+    }
+
+    if (data.closingBalance && data.expectedBalance) {
+      updateData.discrepancy = (
+        parseFloat(data.closingBalance) - parseFloat(data.expectedBalance)
+      ).toFixed(2);
+    } else if (data.closingBalance && data.cashIn) {
+      const opening = parseFloat(existing.openingBalance ?? "0");
+      const cashIn = parseFloat(data.cashIn);
+      const cashOut = parseFloat(data.cashOut ?? existing.cashOut ?? "0");
+      const expected = opening + cashIn - cashOut;
+      updateData.expectedBalance = expected.toFixed(2);
+      updateData.discrepancy = (parseFloat(data.closingBalance) - expected).toFixed(2);
+    }
+
+    const [updated] = await db
+      .update(cashReconciliationsTable)
+      .set(updateData)
+      .where(eq(cashReconciliationsTable.id, req.params.id as string))
+      .returning();
+
+    await logAudit({
+      req,
+      action: "update",
+      resource: "cash_reconciliations",
+      resourceId: req.params.id as string,
+      newValue: updated,
+    });
+    res.json(updated);
   } catch (err) {
     next(err);
   }

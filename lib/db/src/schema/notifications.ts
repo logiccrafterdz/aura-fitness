@@ -7,7 +7,6 @@ import {
   jsonb,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
-import { z } from "zod";
 import { membersTable } from "./members";
 
 export const notificationTemplatesTable = pgTable("notification_templates", {
@@ -51,4 +50,4 @@ export const updateNotificationTemplateSchema =
 
 export type NotificationTemplate = typeof notificationTemplatesTable.$inferSelect;
 export type NotificationRecord = typeof notificationRecordsTable.$inferSelect;
-export type InsertNotificationTemplate = z.infer<typeof insertNotificationTemplateSchema>;
+export type InsertNotificationTemplate = typeof notificationTemplatesTable.$inferInsert;

@@ -5,7 +5,6 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
-import { z } from "zod";
 import { usersTable } from "./users";
 import { membersTable } from "./members";
 
@@ -48,4 +47,4 @@ export const insertTrainerNoteSchema = createInsertSchema(
 
 export type Shift = typeof shiftsTable.$inferSelect;
 export type TrainerNote = typeof trainerNotesTable.$inferSelect;
-export type InsertShift = z.infer<typeof insertShiftSchema>;
+export type InsertShift = typeof shiftsTable.$inferInsert;

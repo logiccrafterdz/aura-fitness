@@ -9,7 +9,6 @@ import {
   boolean,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
-import { z } from "zod";
 import { membersTable } from "./members";
 import { membershipsTable } from "./memberships";
 import { usersTable } from "./users";
@@ -107,6 +106,30 @@ export const discountsTable = pgTable("discounts", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+export const cashReconciliationsTable = pgTable("cash_reconciliations", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  date: text("date").notNull(),
+  openingBalance: numeric("opening_balance", { precision: 10, scale: 2 }).notNull().default("0"),
+  closingBalance: numeric("closing_balance", { precision: 10, scale: 2 }),
+  cashIn: numeric("cash_in", { precision: 10, scale: 2 }).notNull().default("0"),
+  cashOut: numeric("cash_out", { precision: 10, scale: 2 }).notNull().default("0"),
+  expectedBalance: numeric("expected_balance", { precision: 10, scale: 2 }),
+  discrepancy: numeric("discrepancy", { precision: 10, scale: 2 }).default("0"),
+  status: text("status").notNull().default("open"),
+  openedBy: uuid("opened_by").references(() => usersTable.id),
+  closedBy: uuid("closed_by").references(() => usersTable.id),
+  openedAt: timestamp("opened_at").defaultNow().notNull(),
+  closedAt: timestamp("closed_at"),
+  notes: text("notes"),
+});
+
+export const insertCashReconciliationSchema = createInsertSchema(
+  cashReconciliationsTable,
+).omit({ id: true, openedAt: true });
+
+export type CashReconciliation = typeof cashReconciliationsTable.$inferSelect;
+export type InsertCashReconciliation = typeof cashReconciliationsTable.$inferInsert;
+
 export const insertInvoiceSchema = createInsertSchema(invoicesTable).omit({
   id: true,
   invoiceNumber: true,
@@ -124,5 +147,5 @@ export type Invoice = typeof invoicesTable.$inferSelect;
 export type InvoiceItem = typeof invoiceItemsTable.$inferSelect;
 export type Payment = typeof paymentsTable.$inferSelect;
 export type Discount = typeof discountsTable.$inferSelect;
-export type InsertInvoice = z.infer<typeof insertInvoiceSchema>;
-export type InsertPayment = z.infer<typeof insertPaymentSchema>;
+export type InsertInvoice = typeof invoicesTable.$inferInsert;
+export type InsertPayment = typeof paymentsTable.$inferInsert;

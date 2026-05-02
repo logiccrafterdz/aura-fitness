@@ -9,7 +9,6 @@ import {
   boolean,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
-import { z } from "zod";
 import { membersTable } from "./members";
 import { usersTable } from "./users";
 
@@ -125,4 +124,4 @@ export type InventoryTransaction = typeof inventoryTransactionsTable.$inferSelec
 export type PosSession = typeof posSessionsTable.$inferSelect;
 export type Order = typeof ordersTable.$inferSelect;
 export type OrderItem = typeof orderItemsTable.$inferSelect;
-export type InsertProduct = z.infer<typeof insertProductSchema>;
+export type InsertProduct = typeof productsTable.$inferInsert;

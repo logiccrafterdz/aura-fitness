@@ -136,14 +136,14 @@ router.get("/members/:id", requireAuth, async (req, res, next) => {
     const [member] = await db
       .select()
       .from(membersTable)
-      .where(eq(membersTable.id, req.params.id));
+      .where(eq(membersTable.id, req.params.id as string));
     if (!member) throw new AppError(404, "Member not found");
 
     const [activeMembership] = await db
       .select({ id: membershipsTable.id, status: membershipsTable.status, endDate: membershipsTable.endDate, planName: plansTable.name })
       .from(membershipsTable)
       .leftJoin(plansTable, eq(membershipsTable.planId, plansTable.id))
-      .where(and(eq(membershipsTable.memberId, req.params.id), eq(membershipsTable.status, "active")))
+      .where(and(eq(membershipsTable.memberId, req.params.id as string), eq(membershipsTable.status, "active")))
       .orderBy(desc(membershipsTable.createdAt))
       .limit(1);
 
@@ -158,7 +158,7 @@ router.patch("/members/:id", requireAuth, async (req, res, next) => {
     const [existing] = await db
       .select()
       .from(membersTable)
-      .where(eq(membersTable.id, req.params.id));
+      .where(eq(membersTable.id, req.params.id as string));
     if (!existing) throw new AppError(404, "Member not found");
 
     const updateSchema = z.object({
@@ -187,12 +187,12 @@ router.patch("/members/:id", requireAuth, async (req, res, next) => {
         dateOfBirth: data.dateOfBirth ? new Date(data.dateOfBirth) : undefined,
         updatedAt: new Date(),
       })
-      .where(eq(membersTable.id, req.params.id))
+      .where(eq(membersTable.id, req.params.id as string))
       .returning();
 
     if (data.status && data.status !== existing.status) {
       await db.insert(memberTimelineEventsTable).values({
-        memberId: req.params.id,
+        memberId: req.params.id as string,
         eventType: "status_changed",
         description: `Status changed from ${existing.status} to ${data.status}`,
         actorId: req.user!.sub,
@@ -203,7 +203,7 @@ router.patch("/members/:id", requireAuth, async (req, res, next) => {
       req,
       action: "update",
       resource: "members",
-      resourceId: req.params.id,
+      resourceId: req.params.id as string,
       oldValue: existing,
       newValue: updated,
     });
@@ -219,7 +219,7 @@ router.get("/members/:id/timeline", requireAuth, async (req, res, next) => {
     const events = await db
       .select()
       .from(memberTimelineEventsTable)
-      .where(eq(memberTimelineEventsTable.memberId, req.params.id))
+      .where(eq(memberTimelineEventsTable.memberId, req.params.id as string))
       .orderBy(desc(memberTimelineEventsTable.createdAt))
       .limit(50);
     res.json(events);
@@ -242,7 +242,7 @@ router.get("/members/:id/memberships", requireAuth, async (req, res, next) => {
       })
       .from(membershipsTable)
       .leftJoin(plansTable, eq(membershipsTable.planId, plansTable.id))
-      .where(eq(membershipsTable.memberId, req.params.id))
+      .where(eq(membershipsTable.memberId, req.params.id as string))
       .orderBy(desc(membershipsTable.createdAt));
     res.json(rows);
   } catch (err) {
@@ -255,7 +255,7 @@ router.get("/members/:id/invoices", requireAuth, async (req, res, next) => {
     const rows = await db
       .select()
       .from(invoicesTable)
-      .where(eq(invoicesTable.memberId, req.params.id))
+      .where(eq(invoicesTable.memberId, req.params.id as string))
       .orderBy(desc(invoicesTable.createdAt));
     res.json(rows);
   } catch (err) {
@@ -277,7 +277,7 @@ router.get("/members/:id/bookings", requireAuth, async (req, res, next) => {
       .from(bookingsTable)
       .leftJoin(classSessionsTable, eq(bookingsTable.sessionId, classSessionsTable.id))
       .leftJoin(classTypesTable, eq(classSessionsTable.classTypeId, classTypesTable.id))
-      .where(eq(bookingsTable.memberId, req.params.id))
+      .where(eq(bookingsTable.memberId, req.params.id as string))
       .orderBy(desc(bookingsTable.bookedAt))
       .limit(20);
     res.json(rows);
@@ -291,10 +291,95 @@ router.get("/members/:id/access-logs", requireAuth, async (req, res, next) => {
     const rows = await db
       .select()
       .from(accessLogsTable)
-      .where(eq(accessLogsTable.memberId, req.params.id))
+      .where(eq(accessLogsTable.memberId, req.params.id as string))
       .orderBy(desc(accessLogsTable.createdAt))
       .limit(50);
     res.json(rows);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/members/:id/status", requireAuth, async (req, res, next) => {
+  try {
+    const schema = z.object({
+      status: z.enum(["active", "inactive", "suspended", "pending"]),
+      reason: z.string().min(1),
+    });
+    const { status, reason } = schema.parse(req.body);
+
+    const [existing] = await db
+      .select()
+      .from(membersTable)
+      .where(eq(membersTable.id, req.params.id as string));
+    if (!existing) throw new AppError(404, "Member not found");
+    if (existing.status === status) throw new AppError(400, `Member is already ${status}`);
+
+    const [updated] = await db
+      .update(membersTable)
+      .set({ status, updatedAt: new Date() })
+      .where(eq(membersTable.id, req.params.id as string))
+      .returning();
+
+    await db.insert(memberTimelineEventsTable).values({
+      memberId: req.params.id as string,
+      eventType: "status_changed",
+      description: `Status changed from ${existing.status} to ${status} — reason: ${reason}`,
+      actorId: req.user!.sub,
+    });
+
+    await logAudit({
+      req,
+      action: "status_change",
+      resource: "members",
+      resourceId: req.params.id as string,
+      oldValue: { status: existing.status },
+      newValue: { status },
+    });
+
+    res.json(updated);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/members/by-number/:memberNumber", async (req, res, next) => {
+  try {
+    const [member] = await db
+      .select({
+        id: membersTable.id,
+        memberNumber: membersTable.memberNumber,
+        firstName: membersTable.firstName,
+        lastName: membersTable.lastName,
+        firstNameAr: membersTable.firstNameAr,
+        lastNameAr: membersTable.lastNameAr,
+        status: membersTable.status,
+        phone: membersTable.phone,
+        gender: membersTable.gender,
+        photoUrl: membersTable.photoUrl,
+      })
+      .from(membersTable)
+      .where(eq(membersTable.memberNumber, req.params.memberNumber as string));
+    if (!member) throw new AppError(404, "Member not found");
+
+    const [activeMembership] = await db
+      .select({
+        id: membershipsTable.id,
+        status: membershipsTable.status,
+        endDate: membershipsTable.endDate,
+        planName: plansTable.name,
+      })
+      .from(membershipsTable)
+      .leftJoin(plansTable, eq(membershipsTable.planId, plansTable.id))
+      .where(
+        and(
+          eq(membershipsTable.memberId, member.id),
+          eq(membershipsTable.status, "active"),
+        ),
+      )
+      .limit(1);
+
+    res.json({ ...member, activeMembership: activeMembership ?? null });
   } catch (err) {
     next(err);
   }

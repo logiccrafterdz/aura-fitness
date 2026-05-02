@@ -341,7 +341,171 @@ export function useOrders(page: number, limit: number, status?: string) {
 export function useNotificationTemplates() {
   return useQuery({
     queryKey: ["notification-templates"],
-    queryFn: () => api.get<any>("/notifications/templates"),
+    queryFn: () => api.get<any>("/notification-templates"),
+  });
+}
+
+export function useCreateNotificationTemplate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: any) => api.post("/notification-templates", body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["notification-templates"] }),
+  });
+}
+
+export function useUpdateNotificationTemplate(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: any) => api.patch(`/notification-templates/${id}`, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["notification-templates"] }),
+  });
+}
+
+export function useNotificationRecords(page: number, limit: number, memberId?: string) {
+  return useQuery({
+    queryKey: ["notification-records", page, limit, memberId],
+    queryFn: () => {
+      const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+      if (memberId) params.append("memberId", memberId);
+      return api.get<any>(`/notification-records?${params.toString()}`);
+    },
+    refetchInterval: 30000,
+  });
+}
+
+export function useSendNotification() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { eventTrigger: string; memberId: string; language?: "ar" | "fr"; variables?: Record<string, string> }) =>
+      api.post("/notifications/send", body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["notification-records"] }),
+  });
+}
+
+// Member status transition
+export function useMemberStatusChange(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { status: string; reason: string }) =>
+      api.post(`/members/${id}/status`, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["members"] });
+      qc.invalidateQueries({ queryKey: ["members", id] });
+      qc.invalidateQueries({ queryKey: ["member-timeline", id] });
+    },
+  });
+}
+
+// Freeze Requests
+export function useFreezeRequests(page: number, limit: number, status?: string) {
+  return useQuery({
+    queryKey: ["freeze-requests", page, limit, status],
+    queryFn: () => {
+      const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+      if (status && status !== "all") params.append("status", status);
+      return api.get<any>(`/membership-freeze-requests?${params.toString()}`);
+    },
+    refetchInterval: 30000,
+  });
+}
+
+export function useMembershipFreezeRequests(membershipId: string) {
+  return useQuery({
+    queryKey: ["membership-freeze-requests", membershipId],
+    queryFn: () => api.get<any>(`/memberships/${membershipId}/freeze-requests`),
+    enabled: !!membershipId,
+  });
+}
+
+export function useCreateFreezeRequest(membershipId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { freezeStart: string; freezeEnd: string; reason: string }) =>
+      api.post(`/memberships/${membershipId}/freeze-requests`, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["freeze-requests"] });
+      qc.invalidateQueries({ queryKey: ["membership-freeze-requests", membershipId] });
+      qc.invalidateQueries({ queryKey: ["memberships"] });
+    },
+  });
+}
+
+export function useApproveFreezeRequest() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, adminNotes }: { id: string; adminNotes?: string }) =>
+      api.post(`/membership-freeze-requests/${id}/approve`, { adminNotes }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["freeze-requests"] });
+      qc.invalidateQueries({ queryKey: ["memberships"] });
+    },
+  });
+}
+
+export function useRejectFreezeRequest() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, adminNotes }: { id: string; adminNotes?: string }) =>
+      api.post(`/membership-freeze-requests/${id}/reject`, { adminNotes }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["freeze-requests"] });
+      qc.invalidateQueries({ queryKey: ["memberships"] });
+    },
+  });
+}
+
+// Cash Reconciliations
+export function useCashReconciliations(page: number, limit: number) {
+  return useQuery({
+    queryKey: ["cash-reconciliations", page, limit],
+    queryFn: () => {
+      const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+      return api.get<any>(`/cash-reconciliations?${params.toString()}`);
+    },
+    refetchInterval: 60000,
+  });
+}
+
+export function useCurrentCashReconciliation() {
+  return useQuery({
+    queryKey: ["cash-reconciliations-current"],
+    queryFn: () => api.get<any>("/cash-reconciliations/current"),
+    refetchInterval: 60000,
+  });
+}
+
+export function useOpenCashReconciliation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { openingBalance: string; notes?: string }) =>
+      api.post("/cash-reconciliations", body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["cash-reconciliations"] });
+      qc.invalidateQueries({ queryKey: ["cash-reconciliations-current"] });
+    },
+  });
+}
+
+export function useCloseCashReconciliation(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { closingBalance: string; cashIn: string; cashOut?: string; notes?: string }) =>
+      api.patch(`/cash-reconciliations/${id}`, { ...body, status: "closed" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["cash-reconciliations"] });
+      qc.invalidateQueries({ queryKey: ["cash-reconciliations-current"] });
+    },
+  });
+}
+
+export function useUpdateCashReconciliation(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: any) => api.patch(`/cash-reconciliations/${id}`, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["cash-reconciliations"] });
+      qc.invalidateQueries({ queryKey: ["cash-reconciliations-current"] });
+    },
   });
 }
 
@@ -419,5 +583,71 @@ export function useAuditLogs(page: number, limit: number) {
       const params = new URLSearchParams({ page: String(page), limit: String(limit) });
       return api.get<any>(`/audit/logs?${params.toString()}`);
     }
+  });
+}
+
+// Member sub-resource hooks
+export function useMemberTimeline(id: string) {
+  return useQuery({
+    queryKey: ["member-timeline", id],
+    queryFn: () => api.get<any>(`/members/${id}/timeline`),
+    enabled: !!id,
+  });
+}
+
+export function useMemberMemberships(id: string) {
+  return useQuery({
+    queryKey: ["member-memberships", id],
+    queryFn: () => api.get<any>(`/members/${id}/memberships`),
+    enabled: !!id,
+  });
+}
+
+export function useMemberInvoices(id: string) {
+  return useQuery({
+    queryKey: ["member-invoices", id],
+    queryFn: () => api.get<any>(`/members/${id}/invoices`),
+    enabled: !!id,
+  });
+}
+
+export function useMemberBookings(id: string) {
+  return useQuery({
+    queryKey: ["member-bookings", id],
+    queryFn: () => api.get<any>(`/members/${id}/bookings`),
+    enabled: !!id,
+  });
+}
+
+export function useMemberAccessLogs(id: string) {
+  return useQuery({
+    queryKey: ["member-access-logs", id],
+    queryFn: () => api.get<any>(`/members/${id}/access-logs`),
+    enabled: !!id,
+  });
+}
+
+export function useMemberAccessToken(id: string, enabled: boolean = false) {
+  return useQuery({
+    queryKey: ["member-access-token", id],
+    queryFn: () => api.get<any>(`/members/${id}/access-token`),
+    enabled: !!id && enabled,
+    refetchInterval: enabled ? 55000 : false,
+    staleTime: 0,
+  });
+}
+
+export function useMemberByNumber(memberNumber: string) {
+  return useQuery({
+    queryKey: ["member-by-number", memberNumber],
+    queryFn: () => api.get<any>(`/members/by-number/${memberNumber}`),
+    enabled: !!memberNumber,
+  });
+}
+
+export function useVerifyAccess() {
+  return useMutation({
+    mutationFn: (body: { token: string; accessPointId?: string }) =>
+      api.post("/access/verify", body),
   });
 }

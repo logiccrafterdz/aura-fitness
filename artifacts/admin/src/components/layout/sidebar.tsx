@@ -4,23 +4,27 @@ import {
   LayoutDashboard, 
   Users, 
   CreditCard, 
-  Dumbbell, 
   CalendarDays, 
   Store, 
   ShieldCheck, 
   FileText, 
   Settings, 
   LogOut,
-  Bell
+  Bell,
+  Snowflake,
+  Banknote,
+  Dumbbell,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 
 const navItems = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
   { name: "Members", href: "/members", icon: Users },
-  { name: "Plans", href: "/plans", icon: FileText },
+  { name: "Plans", href: "/plans", icon: Dumbbell },
   { name: "Memberships", href: "/memberships", icon: CreditCard },
-  { name: "Billing", href: "/billing", icon: CreditCard },
+  { name: "Freeze Requests", href: "/freeze-requests", icon: Snowflake },
+  { name: "Billing", href: "/billing", icon: FileText },
+  { name: "Cash Register", href: "/cash-reconciliation", icon: Banknote },
   { name: "Access", href: "/access", icon: ShieldCheck },
   { name: "Classes", href: "/classes", icon: CalendarDays },
   { name: "Staff", href: "/staff", icon: Users },

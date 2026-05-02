@@ -68,7 +68,7 @@ router.patch("/class-types/:id", requireAuth, async (req, res, next) => {
     const [updated] = await db
       .update(classTypesTable)
       .set({ ...data, updatedAt: new Date() })
-      .where(eq(classTypesTable.id, req.params.id))
+      .where(eq(classTypesTable.id, req.params.id as string))
       .returning();
     if (!updated) throw new AppError(404, "Class type not found");
     res.json(updated);
@@ -272,7 +272,7 @@ router.get("/class-sessions/:id", requireAuth, async (req, res, next) => {
         classTypesTable,
         eq(classSessionsTable.classTypeId, classTypesTable.id),
       )
-      .where(eq(classSessionsTable.id, req.params.id));
+      .where(eq(classSessionsTable.id, req.params.id as string));
     if (!session) throw new AppError(404, "Session not found");
 
     const [bookings, waitlist] = await Promise.all([
@@ -289,7 +289,7 @@ router.get("/class-sessions/:id", requireAuth, async (req, res, next) => {
         })
         .from(bookingsTable)
         .leftJoin(membersTable, eq(bookingsTable.memberId, membersTable.id))
-        .where(eq(bookingsTable.sessionId, req.params.id)),
+        .where(eq(bookingsTable.sessionId, req.params.id as string)),
       db
         .select({
           id: waitlistEntriesTable.id,
@@ -306,7 +306,7 @@ router.get("/class-sessions/:id", requireAuth, async (req, res, next) => {
         )
         .where(
           and(
-            eq(waitlistEntriesTable.sessionId, req.params.id),
+            eq(waitlistEntriesTable.sessionId, req.params.id as string),
             eq(waitlistEntriesTable.status, "waiting"),
           ),
         )
@@ -341,7 +341,7 @@ router.patch("/class-sessions/:id", requireAuth, async (req, res, next) => {
     const [updated] = await db
       .update(classSessionsTable)
       .set(updateData)
-      .where(eq(classSessionsTable.id, req.params.id))
+      .where(eq(classSessionsTable.id, req.params.id as string))
       .returning();
     if (!updated) throw new AppError(404, "Session not found");
     res.json(updated);
@@ -473,7 +473,7 @@ router.delete("/bookings/:id", requireAuth, async (req, res, next) => {
     const [booking] = await db
       .select()
       .from(bookingsTable)
-      .where(eq(bookingsTable.id, req.params.id));
+      .where(eq(bookingsTable.id, req.params.id as string));
     if (!booking) throw new AppError(404, "Booking not found");
 
     await db
@@ -483,7 +483,7 @@ router.delete("/bookings/:id", requireAuth, async (req, res, next) => {
         cancelledAt: new Date(),
         cancellationReason: reason,
       })
-      .where(eq(bookingsTable.id, req.params.id));
+      .where(eq(bookingsTable.id, req.params.id as string));
 
     const [session] = await db
       .select()
@@ -538,7 +538,7 @@ router.patch(
           status,
           attendedAt: status === "attended" ? new Date() : null,
         })
-        .where(eq(bookingsTable.id, req.params.id))
+        .where(eq(bookingsTable.id, req.params.id as string))
         .returning();
       if (!updated) throw new AppError(404, "Booking not found");
       res.json(updated);

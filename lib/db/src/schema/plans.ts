@@ -9,7 +9,6 @@ import {
   jsonb,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
-import { z } from "zod";
 import { usersTable } from "./users";
 
 export const plansTable = pgTable("plans", {
@@ -48,4 +47,4 @@ export const updatePlanSchema = insertPlanSchema.partial();
 export const selectPlanSchema = createSelectSchema(plansTable);
 
 export type Plan = typeof plansTable.$inferSelect;
-export type InsertPlan = z.infer<typeof insertPlanSchema>;
+export type InsertPlan = typeof plansTable.$inferInsert;

@@ -92,7 +92,7 @@ router.get("/staff/:id", requireAuth, async (req, res, next) => {
       })
       .from(usersTable)
       .leftJoin(rolesTable, eq(usersTable.roleId, rolesTable.id))
-      .where(eq(usersTable.id, req.params.id));
+      .where(eq(usersTable.id, req.params.id as string));
     if (!user) throw new AppError(404, "Staff member not found");
     res.json(user);
   } catch (err) {
@@ -117,11 +117,11 @@ router.patch("/staff/:id", requireAuth, async (req, res, next) => {
       delete updateData.password;
     }
 
-    const [updated] = await db.update(usersTable).set(updateData).where(eq(usersTable.id, req.params.id)).returning();
+    const [updated] = await db.update(usersTable).set(updateData).where(eq(usersTable.id, req.params.id as string)).returning();
     if (!updated) throw new AppError(404, "Staff member not found");
 
     const { passwordHash: _, ...safeUser } = updated;
-    await logAudit({ req, action: "update", resource: "staff", resourceId: req.params.id, newValue: safeUser });
+    await logAudit({ req, action: "update", resource: "staff", resourceId: req.params.id as string, newValue: safeUser });
     res.json(safeUser);
   } catch (err) {
     next(err);

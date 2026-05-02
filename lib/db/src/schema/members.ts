@@ -7,7 +7,6 @@ import {
   pgEnum,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
-import { z } from "zod";
 import { usersTable } from "./users";
 
 export const memberStatusEnum = pgEnum("member_status", [
@@ -67,5 +66,5 @@ export const updateMemberSchema = insertMemberSchema.partial();
 export const selectMemberSchema = createSelectSchema(membersTable);
 
 export type Member = typeof membersTable.$inferSelect;
-export type InsertMember = z.infer<typeof insertMemberSchema>;
-export type UpdateMember = z.infer<typeof updateMemberSchema>;
+export type InsertMember = typeof membersTable.$inferInsert;
+export type UpdateMember = Partial<typeof membersTable.$inferInsert>;

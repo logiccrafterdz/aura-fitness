@@ -68,7 +68,7 @@ router.post("/plans", requireAuth, async (req, res, next) => {
 
 router.get("/plans/:id", requireAuth, async (req, res, next) => {
   try {
-    const [plan] = await db.select().from(plansTable).where(eq(plansTable.id, req.params.id));
+    const [plan] = await db.select().from(plansTable).where(eq(plansTable.id, req.params.id as string));
     if (!plan) throw new AppError(404, "Plan not found");
     res.json(plan);
   } catch (err) {
@@ -78,17 +78,17 @@ router.get("/plans/:id", requireAuth, async (req, res, next) => {
 
 router.patch("/plans/:id", requireAuth, async (req, res, next) => {
   try {
-    const [existing] = await db.select().from(plansTable).where(eq(plansTable.id, req.params.id));
+    const [existing] = await db.select().from(plansTable).where(eq(plansTable.id, req.params.id as string));
     if (!existing) throw new AppError(404, "Plan not found");
 
     const data = planSchema.partial().parse(req.body);
     const [updated] = await db
       .update(plansTable)
       .set({ ...data, updatedAt: new Date() })
-      .where(eq(plansTable.id, req.params.id))
+      .where(eq(plansTable.id, req.params.id as string))
       .returning();
 
-    await logAudit({ req, action: "update", resource: "plans", resourceId: req.params.id, oldValue: existing, newValue: updated });
+    await logAudit({ req, action: "update", resource: "plans", resourceId: req.params.id as string, oldValue: existing, newValue: updated });
     res.json(updated);
   } catch (err) {
     next(err);
@@ -97,11 +97,11 @@ router.patch("/plans/:id", requireAuth, async (req, res, next) => {
 
 router.delete("/plans/:id", requireAuth, async (req, res, next) => {
   try {
-    const [existing] = await db.select().from(plansTable).where(eq(plansTable.id, req.params.id));
+    const [existing] = await db.select().from(plansTable).where(eq(plansTable.id, req.params.id as string));
     if (!existing) throw new AppError(404, "Plan not found");
 
-    await db.update(plansTable).set({ isActive: false, updatedAt: new Date() }).where(eq(plansTable.id, req.params.id));
-    await logAudit({ req, action: "delete", resource: "plans", resourceId: req.params.id });
+    await db.update(plansTable).set({ isActive: false, updatedAt: new Date() }).where(eq(plansTable.id, req.params.id as string));
+    await logAudit({ req, action: "delete", resource: "plans", resourceId: req.params.id as string });
     res.json({ success: true });
   } catch (err) {
     next(err);

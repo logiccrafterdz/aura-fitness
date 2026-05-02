@@ -247,7 +247,7 @@ router.delete("/auth/sessions/:id", requireAuth, async (req, res, next) => {
       .from(refreshTokensTable)
       .where(
         and(
-          eq(refreshTokensTable.id, req.params.id),
+          eq(refreshTokensTable.id, req.params.id as string),
           eq(refreshTokensTable.userId, req.user!.sub),
         ),
       );
@@ -256,7 +256,7 @@ router.delete("/auth/sessions/:id", requireAuth, async (req, res, next) => {
     await db
       .update(refreshTokensTable)
       .set({ revokedAt: new Date() })
-      .where(eq(refreshTokensTable.id, req.params.id));
+      .where(eq(refreshTokensTable.id, req.params.id as string));
 
     res.json({ success: true });
   } catch (err) {

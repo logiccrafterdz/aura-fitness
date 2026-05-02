@@ -5,6 +5,7 @@ import {
   plansTable,
   membersTable,
   memberTimelineEventsTable,
+  membershipFreezeRequestsTable,
 } from "@workspace/db";
 import { eq, and, desc, count } from "drizzle-orm";
 import { z } from "zod";
@@ -124,7 +125,7 @@ router.get("/memberships/:id", requireAuth, async (req, res, next) => {
       })
       .from(membershipsTable)
       .leftJoin(plansTable, eq(membershipsTable.planId, plansTable.id))
-      .where(eq(membershipsTable.id, req.params.id));
+      .where(eq(membershipsTable.id, req.params.id as string));
     if (!row) throw new AppError(404, "Membership not found");
     res.json(row);
   } catch (err) {
@@ -134,7 +135,7 @@ router.get("/memberships/:id", requireAuth, async (req, res, next) => {
 
 router.patch("/memberships/:id", requireAuth, async (req, res, next) => {
   try {
-    const [existing] = await db.select().from(membershipsTable).where(eq(membershipsTable.id, req.params.id));
+    const [existing] = await db.select().from(membershipsTable).where(eq(membershipsTable.id, req.params.id as string));
     if (!existing) throw new AppError(404, "Membership not found");
 
     const schema = z.object({
@@ -146,10 +147,10 @@ router.patch("/memberships/:id", requireAuth, async (req, res, next) => {
     const [updated] = await db
       .update(membershipsTable)
       .set({ ...data, endDate: data.endDate ? new Date(data.endDate) : undefined, updatedAt: new Date() })
-      .where(eq(membershipsTable.id, req.params.id))
+      .where(eq(membershipsTable.id, req.params.id as string))
       .returning();
 
-    await logAudit({ req, action: "update", resource: "memberships", resourceId: req.params.id, oldValue: existing, newValue: updated });
+    await logAudit({ req, action: "update", resource: "memberships", resourceId: req.params.id as string, oldValue: existing, newValue: updated });
     res.json(updated);
   } catch (err) {
     next(err);
@@ -158,7 +159,7 @@ router.patch("/memberships/:id", requireAuth, async (req, res, next) => {
 
 router.post("/memberships/:id/freeze", requireAuth, async (req, res, next) => {
   try {
-    const [membership] = await db.select().from(membershipsTable).where(eq(membershipsTable.id, req.params.id));
+    const [membership] = await db.select().from(membershipsTable).where(eq(membershipsTable.id, req.params.id as string));
     if (!membership) throw new AppError(404, "Membership not found");
     if (membership.status !== "active") throw new AppError(400, "Only active memberships can be frozen");
 
@@ -196,7 +197,7 @@ router.post("/memberships/:id/freeze", requireAuth, async (req, res, next) => {
         endDate: newEndDate,
         updatedAt: new Date(),
       })
-      .where(eq(membershipsTable.id, req.params.id))
+      .where(eq(membershipsTable.id, req.params.id as string))
       .returning();
 
     await db.insert(memberTimelineEventsTable).values({
@@ -206,7 +207,7 @@ router.post("/memberships/:id/freeze", requireAuth, async (req, res, next) => {
       actorId: req.user!.sub,
     });
 
-    await logAudit({ req, action: "freeze", resource: "memberships", resourceId: req.params.id });
+    await logAudit({ req, action: "freeze", resource: "memberships", resourceId: req.params.id as string });
     res.json(updated);
   } catch (err) {
     next(err);
@@ -215,14 +216,14 @@ router.post("/memberships/:id/freeze", requireAuth, async (req, res, next) => {
 
 router.post("/memberships/:id/unfreeze", requireAuth, async (req, res, next) => {
   try {
-    const [membership] = await db.select().from(membershipsTable).where(eq(membershipsTable.id, req.params.id));
+    const [membership] = await db.select().from(membershipsTable).where(eq(membershipsTable.id, req.params.id as string));
     if (!membership) throw new AppError(404, "Membership not found");
     if (membership.status !== "frozen") throw new AppError(400, "Membership is not frozen");
 
     const [updated] = await db
       .update(membershipsTable)
       .set({ status: "active", freezeStart: null, freezeEnd: null, updatedAt: new Date() })
-      .where(eq(membershipsTable.id, req.params.id))
+      .where(eq(membershipsTable.id, req.params.id as string))
       .returning();
 
     await db.insert(memberTimelineEventsTable).values({
@@ -240,7 +241,7 @@ router.post("/memberships/:id/unfreeze", requireAuth, async (req, res, next) => 
 
 router.post("/memberships/:id/cancel", requireAuth, async (req, res, next) => {
   try {
-    const [membership] = await db.select().from(membershipsTable).where(eq(membershipsTable.id, req.params.id));
+    const [membership] = await db.select().from(membershipsTable).where(eq(membershipsTable.id, req.params.id as string));
     if (!membership) throw new AppError(404, "Membership not found");
     if (membership.status === "cancelled") throw new AppError(400, "Already cancelled");
 
@@ -255,7 +256,7 @@ router.post("/memberships/:id/cancel", requireAuth, async (req, res, next) => {
         cancellationReason: reason,
         updatedAt: new Date(),
       })
-      .where(eq(membershipsTable.id, req.params.id))
+      .where(eq(membershipsTable.id, req.params.id as string))
       .returning();
 
     await db.insert(memberTimelineEventsTable).values({
@@ -265,7 +266,7 @@ router.post("/memberships/:id/cancel", requireAuth, async (req, res, next) => {
       actorId: req.user!.sub,
     });
 
-    await logAudit({ req, action: "cancel", resource: "memberships", resourceId: req.params.id });
+    await logAudit({ req, action: "cancel", resource: "memberships", resourceId: req.params.id as string });
     res.json(updated);
   } catch (err) {
     next(err);
@@ -274,7 +275,7 @@ router.post("/memberships/:id/cancel", requireAuth, async (req, res, next) => {
 
 router.post("/memberships/:id/renew", requireAuth, async (req, res, next) => {
   try {
-    const [membership] = await db.select().from(membershipsTable).where(eq(membershipsTable.id, req.params.id));
+    const [membership] = await db.select().from(membershipsTable).where(eq(membershipsTable.id, req.params.id as string));
     if (!membership) throw new AppError(404, "Membership not found");
 
     const [plan] = await db.select().from(plansTable).where(eq(plansTable.id, membership.planId));
@@ -304,6 +305,219 @@ router.post("/memberships/:id/renew", requireAuth, async (req, res, next) => {
     });
 
     res.status(201).json(newMembership);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── FREEZE REQUESTS ────────────────────────────────────────────────────────
+
+router.get("/membership-freeze-requests", requireAuth, async (req, res, next) => {
+  try {
+    const { page, limit, offset } = getPagination(req);
+    const status = req.query.status as string | undefined;
+    const where = status ? eq(membershipFreezeRequestsTable.status, status as any) : undefined;
+    const [rows, [{ total }]] = await Promise.all([
+      db
+        .select({
+          id: membershipFreezeRequestsTable.id,
+          membershipId: membershipFreezeRequestsTable.membershipId,
+          memberId: membersTable.id,
+          memberFirstName: membersTable.firstName,
+          memberLastName: membersTable.lastName,
+          memberNumber: membersTable.memberNumber,
+          planName: plansTable.name,
+          freezeStart: membershipFreezeRequestsTable.freezeStart,
+          freezeEnd: membershipFreezeRequestsTable.freezeEnd,
+          reason: membershipFreezeRequestsTable.reason,
+          status: membershipFreezeRequestsTable.status,
+          adminNotes: membershipFreezeRequestsTable.adminNotes,
+          requestedAt: membershipFreezeRequestsTable.requestedAt,
+        })
+        .from(membershipFreezeRequestsTable)
+        .leftJoin(membershipsTable, eq(membershipFreezeRequestsTable.membershipId, membershipsTable.id))
+        .leftJoin(membersTable, eq(membershipsTable.memberId, membersTable.id))
+        .leftJoin(plansTable, eq(membershipsTable.planId, plansTable.id))
+        .where(where)
+        .orderBy(desc(membershipFreezeRequestsTable.requestedAt))
+        .limit(limit)
+        .offset(offset),
+      db.select({ total: count() }).from(membershipFreezeRequestsTable).where(where),
+    ]);
+    res.json(paginated(rows, Number(total), page, limit));
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/memberships/:id/freeze-requests", requireAuth, async (req, res, next) => {
+  try {
+    const rows = await db
+      .select()
+      .from(membershipFreezeRequestsTable)
+      .where(eq(membershipFreezeRequestsTable.membershipId, req.params.id as string))
+      .orderBy(desc(membershipFreezeRequestsTable.requestedAt));
+    res.json(rows);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/memberships/:id/freeze-requests", requireAuth, async (req, res, next) => {
+  try {
+    const schema = z.object({
+      freezeStart: z.string(),
+      freezeEnd: z.string(),
+      reason: z.string().min(1),
+    });
+    const { freezeStart, freezeEnd, reason } = schema.parse(req.body);
+
+    const [membership] = await db
+      .select()
+      .from(membershipsTable)
+      .where(eq(membershipsTable.id, req.params.id as string));
+    if (!membership) throw new AppError(404, "Membership not found");
+    if (membership.status !== "active") throw new AppError(400, "Only active memberships can request a freeze");
+
+    const pending = await db
+      .select({ id: membershipFreezeRequestsTable.id })
+      .from(membershipFreezeRequestsTable)
+      .where(
+        and(
+          eq(membershipFreezeRequestsTable.membershipId, req.params.id as string),
+          eq(membershipFreezeRequestsTable.status, "pending"),
+        ),
+      );
+    if (pending.length > 0) throw new AppError(400, "A freeze request is already pending for this membership");
+
+    const start = new Date(freezeStart);
+    const end = new Date(freezeEnd);
+    if (end <= start) throw new AppError(400, "freezeEnd must be after freezeStart");
+    const requestedDays = Math.round((end.getTime() - start.getTime()) / 86400000);
+
+    const [request] = await db
+      .insert(membershipFreezeRequestsTable)
+      .values({
+        membershipId: req.params.id as string,
+        memberId: membership.memberId,
+        freezeStart: start,
+        freezeEnd: end,
+        reason,
+        requestedBy: req.user!.sub,
+        status: "pending",
+      })
+      .returning();
+
+    await db.insert(memberTimelineEventsTable).values({
+      memberId: membership.memberId,
+      eventType: "freeze_requested",
+      description: `Freeze request submitted for ${requestedDays} days (${freezeStart} → ${freezeEnd}) — reason: ${reason}`,
+      actorId: req.user!.sub,
+    });
+
+    res.status(201).json(request);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/membership-freeze-requests/:id/approve", requireAuth, async (req, res, next) => {
+  try {
+    const { adminNotes } = z.object({ adminNotes: z.string().optional() }).parse(req.body);
+
+    const [request] = await db
+      .select()
+      .from(membershipFreezeRequestsTable)
+      .where(eq(membershipFreezeRequestsTable.id, req.params.id as string));
+    if (!request) throw new AppError(404, "Freeze request not found");
+    if (request.status !== "pending") throw new AppError(400, "Request is not pending");
+
+    const [membership] = await db
+      .select()
+      .from(membershipsTable)
+      .where(eq(membershipsTable.id, request.membershipId));
+    if (!membership) throw new AppError(404, "Membership not found");
+
+    const requestedDays = Math.round(
+      (request.freezeEnd.getTime() - request.freezeStart.getTime()) / 86400000,
+    );
+    const newEndDate = new Date(membership.endDate);
+    newEndDate.setDate(newEndDate.getDate() + requestedDays);
+
+    await db
+      .update(membershipFreezeRequestsTable)
+      .set({
+        status: "approved",
+        approvedBy: req.user!.sub,
+        reviewedAt: new Date(),
+        adminNotes: adminNotes ?? null,
+      })
+      .where(eq(membershipFreezeRequestsTable.id, req.params.id as string));
+
+    const [updatedMembership] = await db
+      .update(membershipsTable)
+      .set({
+        status: "frozen",
+        freezeStart: request.freezeStart,
+        freezeEnd: request.freezeEnd,
+        freezeReason: request.reason,
+        endDate: newEndDate,
+        updatedAt: new Date(),
+      })
+      .where(eq(membershipsTable.id, request.membershipId))
+      .returning();
+
+    await db.insert(memberTimelineEventsTable).values({
+      memberId: membership.memberId,
+      eventType: "membership_frozen",
+      description: `Membership frozen for ${requestedDays} days until ${request.freezeEnd.toISOString().split("T")[0]}`,
+      actorId: req.user!.sub,
+    });
+
+    await logAudit({
+      req,
+      action: "approve_freeze",
+      resource: "memberships",
+      resourceId: request.membershipId,
+      newValue: updatedMembership,
+    });
+
+    res.json({ request: { ...request, status: "approved" }, membership: updatedMembership });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/membership-freeze-requests/:id/reject", requireAuth, async (req, res, next) => {
+  try {
+    const { adminNotes } = z.object({ adminNotes: z.string().optional() }).parse(req.body);
+
+    const [request] = await db
+      .select()
+      .from(membershipFreezeRequestsTable)
+      .where(eq(membershipFreezeRequestsTable.id, req.params.id as string));
+    if (!request) throw new AppError(404, "Freeze request not found");
+    if (request.status !== "pending") throw new AppError(400, "Request is not pending");
+
+    const [updated] = await db
+      .update(membershipFreezeRequestsTable)
+      .set({
+        status: "rejected",
+        approvedBy: req.user!.sub,
+        reviewedAt: new Date(),
+        adminNotes: adminNotes ?? null,
+      })
+      .where(eq(membershipFreezeRequestsTable.id, req.params.id as string))
+      .returning();
+
+    await db.insert(memberTimelineEventsTable).values({
+      memberId: request.memberId,
+      eventType: "freeze_rejected",
+      description: `Freeze request rejected${adminNotes ? `: ${adminNotes}` : ""}`,
+      actorId: req.user!.sub,
+    });
+
+    res.json(updated);
   } catch (err) {
     next(err);
   }

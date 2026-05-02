@@ -9,10 +9,12 @@ import {
   memberTimelineEventsTable,
   plansTable,
   membershipsTable,
+  membershipFreezeRequestsTable,
   invoicesTable,
   invoiceItemsTable,
   paymentsTable,
   discountsTable,
+  cashReconciliationsTable,
   accessPointsTable,
   accessTokensTable,
   accessLogsTable,
@@ -77,6 +79,8 @@ async function seed() {
       access_tokens,
       audit_logs,
       member_timeline_events,
+      membership_freeze_requests,
+      cash_reconciliations,
       order_items,
       orders,
       inventory_transactions,
@@ -542,7 +546,7 @@ async function seed() {
     const member = members.find((m) => m.id === membership.memberId)!;
     const plan = plans.find((p) => p.id === membership.planId)!;
     const invoiceNumber = `INV-2024-${String(invoiceCounter++).padStart(4, "0")}`;
-    const method = pick(paymentMethods);
+    const method = pick([...paymentMethods] as ("cash" | "baridimob" | "cib" | "edahabia" | "other")[]);
     const isConfirmed = method === "cash" || (i % 3 !== 0);
     const isPending = method !== "cash" && i % 3 === 0;
 
@@ -828,6 +832,61 @@ async function seed() {
   }
   await db.insert(inventoryTransactionsTable).values(invTxData);
   console.log(`✓ ${invTxData.length} inventory transactions`);
+
+  // ── CASH RECONCILIATIONS (last 7 days) ───────────────────────────────────
+  const reconcData = [];
+  for (let day = 6; day >= 0; day--) {
+    const d = new Date();
+    d.setDate(d.getDate() - day);
+    if (d.getDay() === 5) continue; // skip Friday
+    const dateStr = d.toISOString().split("T")[0];
+    const cashSales = String(randomInt(12000, 35000));
+    const opening = day === 6 ? "5000.00" : String(randomInt(3000, 8000));
+    const cashIn = cashSales;
+    const cashOut = String(randomInt(500, 2000));
+    const expected = (parseFloat(opening) + parseFloat(cashIn) - parseFloat(cashOut)).toFixed(2);
+    const discrepancyVal = (Math.random() > 0.5 ? 1 : -1) * randomInt(0, 250);
+    const closing = (parseFloat(expected) + discrepancyVal).toFixed(2);
+    const isClosed = day > 0;
+    reconcData.push({
+      date: dateStr,
+      openingBalance: opening,
+      closingBalance: isClosed ? closing : null,
+      cashIn,
+      cashOut,
+      expectedBalance: isClosed ? expected : null,
+      discrepancy: isClosed ? String(discrepancyVal) : null,
+      status: isClosed ? "closed" : "open",
+      openedBy: receptionId,
+      closedBy: isClosed ? managerId : null,
+      openedAt: new Date(`${dateStr}T08:00:00`),
+      closedAt: isClosed ? new Date(`${dateStr}T20:30:00`) : null,
+      notes: isClosed && Math.abs(discrepancyVal) > 200
+        ? `Écart constaté de ${discrepancyVal > 0 ? "+" : ""}${discrepancyVal} DZD — à vérifier`
+        : null,
+    });
+  }
+  await db.insert(cashReconciliationsTable).values(reconcData);
+  console.log(`✓ ${reconcData.length} cash reconciliation records`);
+
+  // ── FREEZE REQUESTS (sample pending requests) ──────────────────────────────
+  const activeMembershipsForFreeze = memberships.filter((_, i) => i >= 0 && i < 5);
+  const freezeRequestsData = activeMembershipsForFreeze.map((m, i) => {
+    const memberRow = members.find((mb) => mb.id === m.memberId)!;
+    const start = daysFromNow(i + 1);
+    const end = daysFromNow(i + 1 + randomInt(3, 10));
+    return {
+      membershipId: m.id,
+      memberId: memberRow.id,
+      freezeStart: start,
+      freezeEnd: end,
+      reason: pick(["Voyage à l'étranger", "Maladie / hospitalisation", "Voyage professionnel", "Ramadan", "Examen universitaire"]),
+      status: "pending" as const,
+      requestedBy: receptionId,
+    };
+  });
+  await db.insert(membershipFreezeRequestsTable).values(freezeRequestsData);
+  console.log(`✓ ${freezeRequestsData.length} freeze requests`);
 
   // ── LOYALTY POINTS ────────────────────────────────────────────────────────
   const ledgerData = [];

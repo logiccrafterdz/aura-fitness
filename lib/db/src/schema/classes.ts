@@ -86,6 +86,7 @@ export const waitlistEntriesTable = pgTable("waitlist_entries", {
     .notNull()
     .references(() => classSessionsTable.id, { onDelete: "cascade" }),
   position: integer("position").notNull(),
+  status: text("status").notNull().default("waiting"),
   notifiedAt: timestamp("notified_at"),
   expiresAt: timestamp("expires_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -111,6 +112,6 @@ export type ClassType = typeof classTypesTable.$inferSelect;
 export type ClassSession = typeof classSessionsTable.$inferSelect;
 export type Booking = typeof bookingsTable.$inferSelect;
 export type WaitlistEntry = typeof waitlistEntriesTable.$inferSelect;
-export type InsertClassType = z.infer<typeof insertClassTypeSchema>;
-export type InsertClassSession = z.infer<typeof insertClassSessionSchema>;
-export type InsertBooking = z.infer<typeof insertBookingSchema>;
+export type InsertClassType = typeof classTypesTable.$inferInsert;
+export type InsertClassSession = typeof classSessionsTable.$inferInsert;
+export type InsertBooking = typeof bookingsTable.$inferInsert;

@@ -45,7 +45,7 @@ router.get(
   requireAuth,
   async (req, res, next) => {
     try {
-      const { memberId } = req.params;
+      const memberId = req.params.memberId as string;
       const [member] = await db
         .select({ id: membersTable.id, firstName: membersTable.firstName })
         .from(membersTable)
@@ -391,7 +391,7 @@ router.patch("/access/points/:id", requireAuth, async (req, res, next) => {
     const [existing] = await db
       .select()
       .from(accessPointsTable)
-      .where(eq(accessPointsTable.id, req.params.id));
+      .where(eq(accessPointsTable.id, req.params.id as string));
     if (!existing) throw new AppError(404, "Access point not found");
 
     const schema = z.object({
@@ -406,7 +406,7 @@ router.patch("/access/points/:id", requireAuth, async (req, res, next) => {
     const [updated] = await db
       .update(accessPointsTable)
       .set({ ...data, updatedAt: new Date() })
-      .where(eq(accessPointsTable.id, req.params.id))
+      .where(eq(accessPointsTable.id, req.params.id as string))
       .returning();
     res.json(updated);
   } catch (err) {
@@ -419,7 +419,7 @@ router.delete("/access/points/:id", requireAuth, async (req, res, next) => {
     await db
       .update(accessPointsTable)
       .set({ isActive: false, updatedAt: new Date() })
-      .where(eq(accessPointsTable.id, req.params.id));
+      .where(eq(accessPointsTable.id, req.params.id as string));
     res.json({ success: true });
   } catch (err) {
     next(err);
@@ -474,7 +474,7 @@ router.patch(
       const [updated] = await db
         .update(timeRulesTable)
         .set(data)
-        .where(eq(timeRulesTable.id, req.params.id))
+        .where(eq(timeRulesTable.id, req.params.id as string))
         .returning();
       res.json(updated);
     } catch (err) {
