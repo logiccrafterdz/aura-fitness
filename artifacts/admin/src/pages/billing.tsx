@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, Plus, Check, X, Smartphone, Tag } from "lucide-react";
+import { Loader2, Plus, Check, X, Smartphone, Tag, Camera } from "lucide-react";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 
@@ -224,6 +224,7 @@ export default function Billing() {
                       <TableHead>Facture</TableHead>
                       <TableHead>Montant</TableHead>
                       <TableHead>Méthode</TableHead>
+                      <TableHead>Preuve</TableHead>
                       <TableHead>Statut</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
@@ -249,6 +250,13 @@ export default function Billing() {
                               {methodIcon(p.method)}
                               {p.method?.replace("_", " ")}
                             </span>
+                          </TableCell>
+                          <TableCell>
+                            {p.proofUrl ? (
+                              <a href={p.proofUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline flex items-center gap-1 text-sm">
+                                <Camera className="w-3.5 h-3.5" /> Voir
+                              </a>
+                            ) : "—"}
                           </TableCell>
                           <TableCell>{statusBadge(p.status)}</TableCell>
                           <TableCell className="text-right">

@@ -1,6 +1,18 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 
+// Uploads
+export function useFileUpload() {
+  return useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await api.upload<{ url: string }>("/uploads", formData);
+      return res.url;
+    },
+  });
+}
+
 // Members
 export function useMembers(page: number, limit: number, search: string, status?: string, gender?: string) {
   return useQuery({

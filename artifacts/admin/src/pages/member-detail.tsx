@@ -12,8 +12,12 @@ import {
   useLoyaltyRewards,
   useRedeemReward,
   useAdjustMemberPoints,
+  useUpdateMember,
+  useFileUpload,
+  useCreatePayment,
 } from "@/hooks/use-api";
 import { useParams } from "wouter";
+import { useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -38,6 +42,7 @@ import {
   AlertCircle,
   ShieldAlert,
   Gift,
+  Camera,
 } from "lucide-react";
 import { format, differenceInDays } from "date-fns";
 import QRCodeLib from "qrcode";
@@ -193,7 +198,43 @@ function MembershipsTab({ memberId }: { memberId: string }) {
 
 function InvoicesTab({ memberId }: { memberId: string }) {
   const { data: rows, isLoading } = useMemberInvoices(memberId);
+  const createPaymentMutation = useCreatePayment();
+  const fileUploadMutation = useFileUpload();
+  const { toast } = useToast();
+  
+  const [payDialog, setPayDialog] = useState(false);
+  const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
+  const [payAmount, setPayAmount] = useState("");
+  const [payMethod, setPayMethod] = useState("cash");
+  const [proofFile, setProofFile] = useState<File | null>(null);
+
   if (isLoading) return <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>;
+
+  const handlePay = async () => {
+    if (!selectedInvoice || !payAmount) return;
+    try {
+      let proofUrl = null;
+      if (proofFile) {
+        proofUrl = await fileUploadMutation.mutateAsync(proofFile);
+      }
+      await createPaymentMutation.mutateAsync({
+        invoiceId: selectedInvoice.id,
+        body: {
+          memberId,
+          amount: payAmount,
+          method: payMethod,
+          proofUrl,
+          status: payMethod === "cash" ? "confirmed" : "pending"
+        }
+      });
+      toast({ title: "Payment Recorded", description: "Payment successfully created." });
+      setPayDialog(false);
+      setProofFile(null);
+    } catch {
+      toast({ title: "Error", description: "Failed to record payment.", variant: "destructive" });
+    }
+  };
+
   return (
     <div className="space-y-3">
       {!rows?.length && (
@@ -208,16 +249,66 @@ function InvoicesTab({ memberId }: { memberId: string }) {
               <p className="font-mono text-sm font-medium">{inv.invoiceNumber}</p>
               <p className="text-xs text-muted-foreground mt-0.5">{format(new Date(inv.createdAt), "MMM d, yyyy")}</p>
             </div>
-            <div className="text-right">
-              <p className="font-semibold">{Number(inv.total).toLocaleString("fr-DZ")} DZD</p>
-              <Badge
-                variant={inv.status === "paid" ? "default" : inv.status === "pending" ? "outline" : "destructive"}
-                className="text-xs mt-1"
-              >{inv.status}</Badge>
+            <div className="text-right flex items-center gap-3">
+              <div>
+                <p className="font-semibold">{Number(inv.total).toLocaleString("fr-DZ")} DZD</p>
+                <Badge
+                  variant={inv.status === "paid" ? "default" : inv.status === "pending" ? "outline" : "destructive"}
+                  className="text-xs mt-1"
+                >{inv.status}</Badge>
+              </div>
+              {inv.status !== "paid" && (
+                <Button 
+                  size="sm" 
+                  variant="outline"
+                  onClick={() => {
+                    setSelectedInvoice(inv);
+                    setPayAmount(inv.total);
+                    setPayDialog(true);
+                  }}
+                >
+                  Pay
+                </Button>
+              )}
             </div>
           </CardContent>
         </Card>
       ))}
+
+      <Dialog open={payDialog} onOpenChange={o => { if(!o) setPayDialog(false); }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Record Payment</DialogTitle></DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Amount (DZD)</Label>
+              <Input type="number" value={payAmount} onChange={e => setPayAmount(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Method</Label>
+              <Select value={payMethod} onValueChange={setPayMethod}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cash">Cash</SelectItem>
+                  <SelectItem value="baridimob">BaridiMob</SelectItem>
+                  <SelectItem value="cib">CIB</SelectItem>
+                  <SelectItem value="edahabia">Edahabia</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Proof (Receipt / Screenshot)</Label>
+              <Input type="file" accept="image/*,application/pdf" onChange={e => setProofFile(e.target.files?.[0] || null)} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setPayDialog(false)}>Cancel</Button>
+            <Button onClick={handlePay} disabled={createPaymentMutation.isPending || fileUploadMutation.isPending || !payAmount}>
+              {(createPaymentMutation.isPending || fileUploadMutation.isPending) && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              Record
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -441,7 +532,10 @@ export default function MemberDetail() {
   const [newStatus, setNewStatus] = useState("");
   const [statusReason, setStatusReason] = useState("");
   const statusChangeMutation = useMemberStatusChange(id as string);
+  const updateMemberMutation = useUpdateMember(id as string);
+  const fileUploadMutation = useFileUpload();
   const { toast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (isLoading) {
     return <div className="p-8 flex justify-center"><Loader2 className="w-8 h-8 animate-spin text-muted-foreground" /></div>;
@@ -467,11 +561,42 @@ export default function MemberDetail() {
     }
   };
 
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const url = await fileUploadMutation.mutateAsync(file);
+      await updateMemberMutation.mutateAsync({ photoUrl: url });
+      toast({ title: "Photo updated", description: "Member photo successfully updated." });
+    } catch {
+      toast({ title: "Error", description: "Failed to upload photo.", variant: "destructive" });
+    }
+  };
+
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
       <div className="flex items-start gap-4">
-        <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center flex-shrink-0">
-          <User className="w-7 h-7 text-primary" />
+        <div 
+          className="relative w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center flex-shrink-0 overflow-hidden cursor-pointer group"
+          onClick={() => fileInputRef.current?.click()}
+        >
+          {member.photoUrl ? (
+            <img src={member.photoUrl} alt="Member" className="w-full h-full object-cover" />
+          ) : (
+            <User className="w-8 h-8 text-primary" />
+          )}
+          <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+            <Camera className="w-5 h-5 text-white" />
+          </div>
+          <input 
+            type="file" 
+            ref={fileInputRef} 
+            className="hidden" 
+            accept="image/*" 
+            onChange={handlePhotoUpload} 
+            disabled={fileUploadMutation.isPending || updateMemberMutation.isPending}
+          />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-center gap-2 mb-1">

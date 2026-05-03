@@ -13,6 +13,7 @@ import notificationsRouter from "./notifications";
 import dashboardRouter from "./dashboard";
 import settingsRouter from "./settings";
 import loyaltyRouter from "./loyalty";
+import uploadsRouter from "./uploads";
 
 const router: IRouter = Router();
 
@@ -30,5 +31,6 @@ router.use(notificationsRouter);
 router.use(dashboardRouter);
 router.use(settingsRouter);
 router.use(loyaltyRouter);
+router.use(uploadsRouter);
 
 export default router;
