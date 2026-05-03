@@ -8,6 +8,10 @@ import {
   useMemberAccessLogs,
   useMemberAccessToken,
   useMemberStatusChange,
+  useMemberLoyaltyLedger,
+  useLoyaltyRewards,
+  useRedeemReward,
+  useAdjustMemberPoints,
 } from "@/hooks/use-api";
 import { useParams } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Loader2,
@@ -32,6 +37,7 @@ import {
   XCircle,
   AlertCircle,
   ShieldAlert,
+  Gift,
 } from "lucide-react";
 import { format, differenceInDays } from "date-fns";
 import QRCodeLib from "qrcode";
@@ -278,6 +284,150 @@ function AccessLogsTab({ memberId }: { memberId: string }) {
   );
 }
 
+function LoyaltyTab({ memberId }: { memberId: string }) {
+  const { data, isLoading } = useMemberLoyaltyLedger(memberId);
+  const { data: rewards } = useLoyaltyRewards();
+  const redeemMutation = useRedeemReward(memberId);
+  const adjustMutation = useAdjustMemberPoints(memberId);
+  
+  const [adjustDialog, setAdjustDialog] = useState(false);
+  const [adjustPoints, setAdjustPoints] = useState(0);
+  const [adjustReason, setAdjustReason] = useState("");
+  
+  const [redeemDialog, setRedeemDialog] = useState(false);
+  const [selectedReward, setSelectedReward] = useState("");
+
+  const { toast } = useToast();
+
+  if (isLoading) return <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>;
+
+  const handleAdjust = async () => {
+    if (adjustPoints === 0 || !adjustReason) return;
+    try {
+      await adjustMutation.mutateAsync({ points: adjustPoints, description: adjustReason });
+      toast({ title: "Points Adjusted", description: "Member points balance updated." });
+      setAdjustDialog(false);
+      setAdjustPoints(0);
+      setAdjustReason("");
+    } catch {
+      toast({ title: "Error", description: "Failed to adjust points.", variant: "destructive" });
+    }
+  };
+
+  const handleRedeem = async () => {
+    if (!selectedReward) return;
+    try {
+      await redeemMutation.mutateAsync({ rewardId: selectedReward });
+      toast({ title: "Reward Redeemed", description: "Reward claimed successfully." });
+      setRedeemDialog(false);
+      setSelectedReward("");
+    } catch {
+      toast({ title: "Error", description: "Failed to redeem reward. Check balance or stock.", variant: "destructive" });
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardContent className="p-6 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+              <Gift className="w-6 h-6 text-primary" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-muted-foreground">Points Balance</p>
+              <h2 className="text-3xl font-bold">{data?.balance || 0} <span className="text-sm font-normal text-muted-foreground">pts</span></h2>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setAdjustDialog(true)}>Adjust Balance</Button>
+            <Button onClick={() => setRedeemDialog(true)}>Redeem Reward</Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Points Ledger</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {!data?.ledger?.length ? (
+              <p className="text-center text-muted-foreground py-4">No points history found.</p>
+            ) : (
+              data.ledger.map((entry: any) => (
+                <div key={entry.id} className="flex items-center justify-between p-3 border rounded-lg">
+                  <div>
+                    <p className="font-medium text-sm">{entry.description || "Points Adjustment"}</p>
+                    <p className="text-xs text-muted-foreground">{format(new Date(entry.createdAt), "MMM d, yyyy h:mm a")}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className={`font-semibold ${entry.direction === 'in' ? 'text-emerald-600' : 'text-red-500'}`}>
+                      {entry.direction === 'in' ? '+' : '-'}{entry.points}
+                    </p>
+                    <p className="text-xs text-muted-foreground">Balance: {entry.balance}</p>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Dialog open={adjustDialog} onOpenChange={setAdjustDialog}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Adjust Points Balance</DialogTitle></DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Points to Adjust (Use negative for deduction)</Label>
+              <Input type="number" value={adjustPoints} onChange={e => setAdjustPoints(Number(e.target.value))} />
+            </div>
+            <div className="space-y-2">
+              <Label>Reason</Label>
+              <Input value={adjustReason} onChange={e => setAdjustReason(e.target.value)} placeholder="e.g. Compensation, Manual deduction" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setAdjustDialog(false)}>Cancel</Button>
+            <Button onClick={handleAdjust} disabled={adjustMutation.isPending || adjustPoints === 0 || !adjustReason}>
+              {adjustMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />} Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={redeemDialog} onOpenChange={setRedeemDialog}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Redeem Reward</DialogTitle></DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Select Reward</Label>
+              <Select value={selectedReward} onValueChange={setSelectedReward}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose a reward..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {rewards?.filter((r: any) => r.isActive).map((reward: any) => (
+                    <SelectItem key={reward.id} value={reward.id} disabled={(data?.balance || 0) < reward.pointsCost}>
+                      {reward.name} ({reward.pointsCost} pts) - {reward.stock !== null ? `${reward.stock} in stock` : "Unlimited"}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setRedeemDialog(false)}>Cancel</Button>
+            <Button onClick={handleRedeem} disabled={redeemMutation.isPending || !selectedReward}>
+              {redeemMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />} Redeem
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
 const STATUS_OPTIONS = [
   { value: "active", label: "Active" },
   { value: "inactive", label: "Inactive" },
@@ -400,6 +550,7 @@ export default function MemberDetail() {
           <TabsTrigger value="overview"><User className="w-3.5 h-3.5 mr-1.5" />Overview</TabsTrigger>
           <TabsTrigger value="qr"><QrCode className="w-3.5 h-3.5 mr-1.5" />QR Code</TabsTrigger>
           <TabsTrigger value="timeline"><Clock className="w-3.5 h-3.5 mr-1.5" />Timeline</TabsTrigger>
+          <TabsTrigger value="loyalty"><Gift className="w-3.5 h-3.5 mr-1.5" />Loyalty</TabsTrigger>
           <TabsTrigger value="memberships"><Calendar className="w-3.5 h-3.5 mr-1.5" />Memberships</TabsTrigger>
           <TabsTrigger value="invoices"><CreditCard className="w-3.5 h-3.5 mr-1.5" />Invoices</TabsTrigger>
           <TabsTrigger value="bookings"><BookOpen className="w-3.5 h-3.5 mr-1.5" />Bookings</TabsTrigger>
@@ -474,6 +625,7 @@ export default function MemberDetail() {
 
         <TabsContent value="qr" className="mt-6"><QRCodeTab memberId={id as string} /></TabsContent>
         <TabsContent value="timeline" className="mt-6"><TimelineTab memberId={id as string} /></TabsContent>
+        <TabsContent value="loyalty" className="mt-6"><LoyaltyTab memberId={id as string} /></TabsContent>
         <TabsContent value="memberships" className="mt-6"><MembershipsTab memberId={id as string} /></TabsContent>
         <TabsContent value="invoices" className="mt-6"><InvoicesTab memberId={id as string} /></TabsContent>
         <TabsContent value="bookings" className="mt-6"><BookingsTab memberId={id as string} /></TabsContent>

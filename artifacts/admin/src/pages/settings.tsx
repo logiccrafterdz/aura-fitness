@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useSettingsConfig, useAuditLogs } from "@/hooks/use-api";
+import { useSettingsConfig, useAuditLogs, useLoyaltyRules, useLoyaltyRewards } from "@/hooks/use-api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -12,6 +12,8 @@ export default function Settings() {
 
   const { data: configData, isLoading: isLoadingConfig } = useSettingsConfig();
   const { data: auditData, isLoading: isLoadingAudit } = useAuditLogs(page, limit);
+  const { data: loyaltyRules } = useLoyaltyRules();
+  const { data: loyaltyRewards } = useLoyaltyRewards();
 
   return (
     <div className="p-8 space-y-6">
@@ -25,6 +27,7 @@ export default function Settings() {
       <Tabs defaultValue="config">
         <TabsList>
           <TabsTrigger value="config">Configuration</TabsTrigger>
+          <TabsTrigger value="loyalty">Loyalty & Rewards</TabsTrigger>
           <TabsTrigger value="audit">Audit Logs</TabsTrigger>
         </TabsList>
         
@@ -50,6 +53,71 @@ export default function Settings() {
                   </div>
                 </div>
               )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="loyalty" className="mt-6 space-y-6">
+          <Card>
+            <CardHeader>
+              <div className="flex justify-between items-center">
+                <CardTitle>Points Rules</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Event</TableHead>
+                    <TableHead>Points</TableHead>
+                    <TableHead>Description</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {loyaltyRules?.map((rule: any) => (
+                    <TableRow key={rule.id}>
+                      <TableCell className="font-medium">{rule.eventType}</TableCell>
+                      <TableCell>{rule.points}</TableCell>
+                      <TableCell className="text-muted-foreground">{rule.description}</TableCell>
+                      <TableCell>{rule.isActive ? "Active" : "Inactive"}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <div className="flex justify-between items-center">
+                <CardTitle>Rewards Catalog</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Reward</TableHead>
+                    <TableHead>Cost</TableHead>
+                    <TableHead>Stock</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {loyaltyRewards?.map((reward: any) => (
+                    <TableRow key={reward.id}>
+                      <TableCell className="font-medium">
+                        {reward.name}
+                        {reward.nameAr && <div className="text-sm text-muted-foreground">{reward.nameAr}</div>}
+                      </TableCell>
+                      <TableCell>{reward.pointsCost} pts</TableCell>
+                      <TableCell>{reward.stock !== null ? reward.stock : "Unlimited"}</TableCell>
+                      <TableCell>{reward.isActive ? "Active" : "Inactive"}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             </CardContent>
           </Card>
         </TabsContent>

@@ -12,6 +12,7 @@ import storeRouter from "./store";
 import notificationsRouter from "./notifications";
 import dashboardRouter from "./dashboard";
 import settingsRouter from "./settings";
+import loyaltyRouter from "./loyalty";
 
 const router: IRouter = Router();
 
@@ -28,5 +29,6 @@ router.use(storeRouter);
 router.use(notificationsRouter);
 router.use(dashboardRouter);
 router.use(settingsRouter);
+router.use(loyaltyRouter);
 
 export default router;

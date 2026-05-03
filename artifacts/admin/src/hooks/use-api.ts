@@ -676,3 +676,66 @@ export function usePortalQrToken(memberNumber: string, enabled: boolean = false)
     gcTime: 0,
   });
 }
+
+// Loyalty System
+export function useLoyaltyRules() {
+  return useQuery({
+    queryKey: ["loyalty-rules"],
+    queryFn: () => api.get<any>("/loyalty/rules"),
+  });
+}
+
+export function useCreateOrUpdateLoyaltyRule() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: any) => api.post("/loyalty/rules", body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["loyalty-rules"] }),
+  });
+}
+
+export function useLoyaltyRewards() {
+  return useQuery({
+    queryKey: ["loyalty-rewards"],
+    queryFn: () => api.get<any>("/loyalty/rewards"),
+  });
+}
+
+export function useCreateLoyaltyReward() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: any) => api.post("/loyalty/rewards", body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["loyalty-rewards"] }),
+  });
+}
+
+export function useMemberLoyaltyLedger(memberId: string) {
+  return useQuery({
+    queryKey: ["loyalty-ledger", memberId],
+    queryFn: () => api.get<{ balance: number; ledger: any[] }>(`/loyalty/members/${memberId}/ledger`),
+    enabled: !!memberId,
+  });
+}
+
+export function useAdjustMemberPoints(memberId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { points: number; description: string }) =>
+      api.post(`/loyalty/members/${memberId}/adjust`, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["loyalty-ledger", memberId] });
+      qc.invalidateQueries({ queryKey: ["members", memberId] });
+    },
+  });
+}
+
+export function useRedeemReward(memberId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { rewardId: string }) =>
+      api.post(`/loyalty/members/${memberId}/redeem`, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["loyalty-ledger", memberId] });
+      qc.invalidateQueries({ queryKey: ["loyalty-rewards"] });
+    },
+  });
+}
